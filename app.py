@@ -1,42 +1,87 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from bs4 import BeautifulSoup
 import pandas as pd
 import requests
 from io import StringIO
 import numpy as np
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 
 app = Flask(__name__)
+
+# Configuração do JWT
+app.config['JWT_SECRET_KEY'] = 'sua_chave_secreta_aqui'  # Defina uma chave secreta forte
+jwt = JWTManager(app)
+
 port = 5000
 url_base_csv = 'http://vitibrasil.cnpuv.embrapa.br/download/'
 
 
+# Função para criar token de acesso
+@app.route('/login', methods=['POST'])
+def login():
+    if not request.is_json:
+        return jsonify({"msg": "Missing JSON in request"}), 400
+
+    username = request.json.get('username', None)
+    password = request.json.get('password', None)
+
+    # Verificação simples de usuário/senha (substitua por sua lógica de verificação)
+    if username != 'admin' or password != 'senha123':
+        return jsonify({"msg": "Bad username or password"}), 401
+
+    # Cria o token de acesso
+    access_token = create_access_token(identity=username)
+    return jsonify(access_token=access_token)
+
+
+# Protege o endpoint usando JWT
+@app.route('/producaoCSV')
+@jwt_required()  # Requer autenticação JWT para acessar este endpoint
+def producao_csv():
+    return get_data("Producao")
+
+
+@app.route('/processamentoCSV/tipo/<tipo>')
+@jwt_required()  # Requer autenticação JWT para acessar este endpoint
+def processamento_csv(tipo):
+    return get_data(f"Processa{tipo}")
+
+
+@app.route('/comercializacaoCSV')
+@jwt_required()  # Requer autenticação JWT para acessar este endpoint
+def comercializacao_csv():
+    return get_data("Comercio")
+
+
+@app.route('/importacaoCSV/tipo/<tipo>')
+@jwt_required()  # Requer autenticação JWT para acessar este endpoint
+def importacao_csv(tipo):
+    return get_data(f"Imp{tipo}")
+
+
+@app.route('/exportacaoCSV/tipo/<tipo>')
+@jwt_required()  # Requer autenticação JWT para acessar este endpoint
+def exportacao_csv(tipo):
+    return get_data(f"Exp{tipo}")
+
+
 def get_data(page: str):
     try:
-        # Faz a requisição
         response = requests.get(url_base_csv + page + ".csv")
-
-        # Verifica se o código de status HTTP é 200 (OK)
         if response.status_code == 200:
-            # Converte o conteúdo da resposta em um objeto semelhante a um arquivo
             csv_data = StringIO(response.content.decode("utf-8"))
             df = pd.read_csv(csv_data, sep=";")
             df.fillna(0, inplace=True)
 
             if 'control' in df.columns:
-                # Garante que a coluna 'control' seja do tipo string
                 df['control'] = df['control'].astype(str)
-
-                # Cria a máscara para verificar se os valores estão em maiúsculas
                 mask_upper = df['control'].str.isupper()
 
                 df_dict = {}
                 indices = df[mask_upper].index.tolist()
-
-                # Adiciona o final do DataFrame para capturar a última seção
                 indices.append(len(df))
 
                 if not indices or len(indices) == 1:
-                    # Se não houver nenhuma linha em maiúsculas, retorna o DataFrame completo
                     return jsonify(df.to_dict(orient='records'))
 
                 for i in range(len(indices) - 1):
@@ -54,34 +99,6 @@ def get_data(page: str):
 
     except requests.RequestException as e:
         return jsonify({"error": str(e)}), 500
-
-# obter os dados de produção
-@app.route('/producaoCSV')
-def producao_csv():
-    return get_data("Producao")
-
-# obter os dados de processamento por tipo
-# opições: Viniferas, Americanas, Mesa e Semclass
-@app.route('/processamentoCSV/tipo/<tipo>')
-def processamento_csv(tipo):
-    return get_data(f"Processa{tipo}")
-
-# obter os dados de comercialização
-@app.route('/comercializacaoCSV')
-def comercializacao_csv():
-    return get_data("Comercio")
-
-# obter os dados de importaçao por tipo
-# opições: Vinhos, Espumantes, Frescas, Passas e Suco
-@app.route('/importacaoCSV/tipo/<tipo>')
-def importacao_csv(tipo):
-    return get_data(f"Imp{tipo}")
-
-# obter os dados de exportação por tipo
-# opições: Vinho, Espumantes, Uva e Suco
-@app.route('/exportacaoCSV/tipo/<tipo>')
-def exportacao_csv(tipo):
-    return get_data(f"Exp{tipo}")
 
 
 if __name__ == '__main__':
