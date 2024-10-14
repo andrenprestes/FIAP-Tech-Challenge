@@ -1,6 +1,3 @@
-Aqui está um modelo de arquivo `README.md` para o seu projeto, que abrange os dois códigos (`app.py` e `aws_bucket.py`). Ele está formatado para o GitHub e inclui uma visão geral do projeto, instruções de instalação, execução e detalhes sobre os scripts e o uso de AWS.
-
-```markdown
 # Flask API and AWS S3 Integration
 
 ## Overview
@@ -133,8 +130,6 @@ Feel free to submit issues or fork the repository to contribute to the project. 
 ## License
 
 This project is licensed under the MIT License. See the `LICENSE` file for more details.
-
-```
 
 ### Steps Summary
 
