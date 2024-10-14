@@ -13,6 +13,35 @@ This project demonstrates the integration of a **Flask API** that processes CSV 
 └── requirements.txt       # Python dependencies
 ```
 
+## Architecture
+
+The architecture of this project involves the interaction between a user, a Flask API, AWS Lambda, and AWS S3 storage. Below is the architecture diagram:
+
+```mermaid
+graph TD;
+    A[User Request] --> B[AWS Lambda];
+    B --> C[Flask API];
+    C --> D[Process JSON Response];
+    D --> E[Save Data as Parquet];
+    E --> F[S3 Bucket];
+    
+    subgraph AWS
+        B
+        F
+    end
+    
+    style B fill:#f9f,stroke:#333,stroke-width:4px;
+    style F fill:#bbf,stroke:#333,stroke-width:4px;
+```
+
+### Explanation: 
+
+1. **User Request**: The user makes a request to the API, which is processed by an AWS Lambda function.
+2. **Lambda Function**: The Lambda function makes the call to the Flask API, which is hosted externally, and retrieves data in JSON format.
+3. **Flask API**: A Flask API collects CSV data, processes it, and returns a JSON response.
+4. **JSON Processing**: The Lambda function transforms the JSON data into a pandas DataFrame and adds data information from the processing.
+5. **Write to S3**: The processed data is saved as a Parquet file in S3.
+
 ## Technologies Used
 
 - **Python**: Core language used for both API development and data processing.
