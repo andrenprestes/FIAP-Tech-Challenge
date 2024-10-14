@@ -177,7 +177,7 @@ The architecture you've set up—using a Flask API, AWS Lambda, and S3 for proce
 - **Storage**: AWS S3 is a scalable storage solution for training data, intermediate results, and model outputs.
 - **Machine Learning Pipeline**: Once the data is in S3, it can be loaded into a machine learning framework (e.g., AWS SageMaker, or even local systems) to train models, evaluate performance, and deploy them for inference.
 
-This architecture allows for real-time data ingestion, automated processing, and machine learning model training—all of which can be applied to various industries and use cases!
+This architecture allows for real-time data ingestion, automated processing, and machine learning model training—all of which can be applied to various industries and use cases.
 
 ## License
 
