@@ -1,10 +1,11 @@
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 from flask import Flask, jsonify, request
 from bs4 import BeautifulSoup
+from io import StringIO
 import pandas as pd
 import requests
-from io import StringIO
 import numpy as np
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required
+
 
 app = Flask(__name__)
 
@@ -38,34 +39,83 @@ def login():
 @app.route('/producaoCSV')
 @jwt_required()  # Requer autenticação JWT para acessar este endpoint
 def producao_csv():
+    """
+    Endpoint para obter dados de produção de uva.
+    
+    Returns:
+        JSON: Retorna os dados do arquivo 'Producao.csv' em formato JSON.
+    """
     return get_data("Producao")
 
 
 @app.route('/processamentoCSV/tipo/<tipo>')
 @jwt_required()  # Requer autenticação JWT para acessar este endpoint
 def processamento_csv(tipo):
+    """
+    Endpoint para obter dados de processamento de uva por tipo.
+    
+    Parameters:
+        tipo (str): O tipo de processamento. Pode ser 'Viniferas', 'Americanas', 'Mesa', 'Semclass'.
+    
+    Returns:
+        JSON: Retorna os dados do arquivo correspondente em formato JSON.
+    """
     return get_data(f"Processa{tipo}")
 
 
 @app.route('/comercializacaoCSV')
 @jwt_required()  # Requer autenticação JWT para acessar este endpoint
 def comercializacao_csv():
+    """
+    Endpoint para obter dados de comercialização de uva.
+    
+    Returns:
+        JSON: Retorna os dados do arquivo 'Comercio.csv' em formato JSON.
+    """
     return get_data("Comercio")
 
 
 @app.route('/importacaoCSV/tipo/<tipo>')
 @jwt_required()  # Requer autenticação JWT para acessar este endpoint
 def importacao_csv(tipo):
+    """
+    Endpoint para obter dados de importação de uva por tipo.
+    
+    Parameters:
+        tipo (str): O tipo de importação. Pode ser 'Vinhos', 'Espumantes', 'Frescas', 'Passas', 'Suco'.
+    
+    Returns:
+        JSON: Retorna os dados do arquivo correspondente em formato JSON.
+    """
     return get_data(f"Imp{tipo}")
 
 
 @app.route('/exportacaoCSV/tipo/<tipo>')
 @jwt_required()  # Requer autenticação JWT para acessar este endpoint
 def exportacao_csv(tipo):
+    """
+    Endpoint para obter dados de exportação de uva por tipo.
+    
+    Parameters:
+        tipo (str): O tipo de exportação. Pode ser 'Vinho', 'Espumantes', 'Uva', 'Suco'.
+    
+    Returns:
+        JSON: Retorna os dados do arquivo correspondente em formato JSON.
+    """
     return get_data(f"Exp{tipo}")
 
 
 def get_data(page: str):
+    """
+    Faz uma requisição para a URL base com o nome da página fornecida e retorna os dados CSV processados como JSON.
+
+    Parameters:
+        page (str): O nome do arquivo CSV a ser baixado e processado (sem a extensão .csv).
+
+    Returns:
+        JSON: Retorna os dados em formato JSON, seja o DataFrame completo ou dividido em seções com base na coluna 'control'.
+        Em caso de erro, retorna um código de status e uma mensagem de erro apropriada.
+    """
     try:
         response = requests.get(url_base_csv + page + ".csv")
         if response.status_code == 200:
@@ -99,7 +149,6 @@ def get_data(page: str):
 
     except requests.RequestException as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=port)
