@@ -54,34 +54,55 @@ class S3Handler(logging.Handler):
             self.s3_client.put_object(Bucket=self.bucket_name, Key=self.object_name, Body=log_content.encode('utf-8'))
             self.buffer.clear()
 
-
-def get_data_from_api(api_url):
+def get_jwt_token(api_url, username, password):
     """
-    Faz uma requisição GET à API Flask e retorna os dados no formato JSON.
+    Faz a requisição para obter o token JWT a partir das credenciais.
+
+    Parâmetros:
+        api_url (str): A URL do endpoint de login da API Flask.
+        username (str): Nome de usuário.
+        password (str): Senha.
+
+    Retorna:
+        str: O token JWT se a requisição for bem-sucedida, ou None em caso de erro.
+    """
+    try:
+        response = requests.post(f'{api_url}/login', json={'username': username, 'password': password})
+        if response.status_code == 200:
+            logging.info("Token JWT obtido com sucesso.")
+            return response.json().get('access_token')
+        else:
+            logging.error(f"Falha ao obter o token JWT. Status Code: {response.status_code}")
+            return None
+    except Exception as e:
+        logging.exception(f"Erro ao obter o token JWT: {e}")
+        return None
+
+def get_data_from_api(api_url, token):
+    """
+    Faz uma requisição GET à API Flask com autenticação JWT e retorna os dados no formato JSON.
 
     Parâmetros:
         api_url (str): A URL da API onde os dados serão requisitados.
+        token (str): O token JWT para autenticação.
 
     Retorna:
         dict: Os dados JSON retornados pela API, se a requisição for bem-sucedida.
         None: Retorna None se ocorrer um erro na requisição ou se o código de status HTTP não for 200.
     """
+    headers = {'Authorization': f'Bearer {token}'}
     try:
-        response = requests.get(api_url)
+        response = requests.get(api_url, headers=headers)
 
-        # Verifica se a requisição foi bem-sucedida
         if response.status_code == 200:
             logging.info(f"Dados recebidos da API: {api_url}")
             return response.json()
         else:
-            #print(f"Erro: Status Code {response.status_code} for {api_url}")
             logging.error(f"Erro: Status Code {response.status_code} ao acessar {api_url}")
             return None
     except Exception as e:
-        #print(f"Erro ao acessar a API: {e}")
         logging.exception(f"Erro ao acessar a API: {e}")
         return None
-
 
 def save_to_s3(df, bucket_name, file_key):
     """
@@ -111,7 +132,6 @@ def save_to_s3(df, bucket_name, file_key):
         logging.exception(f"Erro ao salvar arquivo no S3: {e}")
         #print(f"Erro ao salvar arquivo no S3: {e}")
 
-
 def main():
     """
     Função principal que faz a requisição à API Flask, processa os dados
@@ -130,6 +150,17 @@ def main():
     s3_handler = S3Handler(bucket_name, log_file_key)
     s3_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(s3_handler)
+
+    # URL da API Flask e credenciais
+    api_url_base = 'http://localhost:5000'
+    username = 'admin'
+    password = 'senha123'
+
+    # Obtém o token JWT
+    token = get_jwt_token(api_url_base, username, password)
+    if not token:
+        logging.error("Token JWT não foi obtido. Encerrando o processo.")
+        return
 
     lista_request = [
         'processamentoCSV/tipo/Viniferas',
@@ -152,14 +183,14 @@ def main():
     # URL da API Flask
     for item in lista_request:
         # TODO: Verifique o endereço real onde a API Flask está rodando.
-        api_url = f'http://localhost:5000/{item}'
+        api_url = f'{api_url_base}/{item}'
 
         # Caminho do Arquivo parquet
         file_key = f'data/{dt_processamento}/{item}.parquet'
 
         # Obtém os dados da API
-        data = get_data_from_api(api_url)
-        print(data)
+        data = get_data_from_api(api_url, token)
+        #print(data)
 
         if data:
             if isinstance(data, dict):
@@ -171,13 +202,6 @@ def main():
 
                     # Salva o DataFrame como Parquet no S3
                     save_to_s3(df, bucket_name, file_key)
-            #elif isinstance(data, list):
-            #    df = pd.DataFrame(data)
-            #    print(df.head())
-            #    df['data_processamento'] = dt_processamento
-
-                # Salva o DataFrame como Parquet no S3
-            #   save_to_s3(df, bucket_name, file_key)
             else:
                 #print(f"Dataframe Vazio para {api_url}")
                 logging.warning("Formato de dados inesperado. Esperado dict.")

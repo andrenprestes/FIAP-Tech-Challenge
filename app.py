@@ -20,6 +20,34 @@ url_base_csv = 'http://vitibrasil.cnpuv.embrapa.br/download/'
 # Função para criar token de acesso
 @app.route('/login', methods=['POST'])
 def login():
+    """
+    Endpoint para autenticação de usuário e geração de um token de acesso JWT.
+
+    Este endpoint valida as credenciais do usuário recebidas em formato JSON, verificando se o 'username'
+    e 'password' correspondem às credenciais esperadas. Caso a autenticação seja bem-sucedida, um token
+    JWT é gerado e retornado para que o usuário possa acessar outros endpoints protegidos da API.
+
+    Request Body (JSON):
+        - username (str): O nome de usuário do cliente.
+        - password (str): A senha do cliente.
+
+    Returns:
+        JSON:
+            - Se o JSON estiver ausente ou incorreto, retorna:
+                {
+                    "msg": "Missing JSON in request"
+                }, com status HTTP 400 (Bad Request).
+
+            - Se o 'username' ou 'password' forem inválidos, retorna:
+                {
+                    "msg": "Bad username or password"
+                }, com status HTTP 401 (Unauthorized).
+
+            - Se a autenticação for bem-sucedida, retorna:
+                {
+                    "access_token": "<token>"
+                }, com status HTTP 200 (OK).
+    """
     if not request.is_json:
         return jsonify({"msg": "Missing JSON in request"}), 400
 
@@ -60,7 +88,11 @@ def processamento_csv(tipo):
     Returns:
         JSON: Retorna os dados do arquivo correspondente em formato JSON.
     """
-    return get_data(f"Processa{tipo}")
+    if tipo in ["Americanas", "Mesa", "Semclass"]:
+        separator = "\t"
+    else:
+        separator = ";"
+    return get_data(f"Processa{tipo}", separator)
 
 
 @app.route('/comercializacaoCSV')
@@ -105,12 +137,13 @@ def exportacao_csv(tipo):
     return get_data(f"Exp{tipo}")
 
 
-def get_data(page: str):
+def get_data(page: str, separator=";"):
     """
     Faz uma requisição para a URL base com o nome da página fornecida e retorna os dados CSV processados como JSON.
 
     Parameters:
         page (str): O nome do arquivo CSV a ser baixado e processado (sem a extensão .csv).
+        separator (str): Separador utilizado para carregamento do Dataframe.
 
     Returns:
         JSON: Retorna os dados em formato JSON, seja o DataFrame completo ou dividido em seções com base na coluna 'control'.
@@ -120,7 +153,7 @@ def get_data(page: str):
         response = requests.get(url_base_csv + page + ".csv")
         if response.status_code == 200:
             csv_data = StringIO(response.content.decode("utf-8"))
-            df = pd.read_csv(csv_data, sep=";")
+            df = pd.read_csv(csv_data, sep=separator)
             df.fillna(0, inplace=True)
 
             if 'control' in df.columns:
