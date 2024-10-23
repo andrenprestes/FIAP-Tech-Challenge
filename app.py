@@ -154,31 +154,32 @@ def get_data(page: str, separator=";"):
         if response.status_code == 200:
             csv_data = StringIO(response.content.decode("utf-8"))
             df = pd.read_csv(csv_data, sep=separator)
-            df.fillna(0, inplace=True)
-
-            if 'control' in df.columns:
-                df['control'] = df['control'].astype(str)
-                mask_upper = df['control'].str.isupper()
-
-                df_dict = {}
-                indices = df[mask_upper].index.tolist()
-                indices.append(len(df))
-
-                if not indices or len(indices) == 1:
-                    return jsonify(df.to_dict(orient='records'))
-
-                for i in range(len(indices) - 1):
-                    df_temp = df.iloc[indices[i]:indices[i + 1]]
-                    key = df_temp.iloc[0]['control']
-                    df_temp = df_temp.drop(columns=['control'])
-                    df_dict[key] = df_temp.to_dict(orient='records')
-
-                return jsonify(df_dict)
-            else:
-                return jsonify(df.to_dict(orient='records'))
         else:
-            return jsonify(
-                {"error": f"Failed to retrieve data, status code: {response.status_code}"}), response.status_code
+            df = pd.read_csv("arquivos_manuais\\" + page + ".csv", sep=separator)
+            
+        df.fillna(0, inplace=True)
+
+        if 'control' in df.columns:
+            df['control'] = df['control'].astype(str)
+            mask_upper = df['control'].str.isupper()
+
+            df_dict = {}
+            indices = df[mask_upper].index.tolist()
+            indices.append(len(df))
+
+            if not indices or len(indices) == 1:
+                return jsonify(df.to_dict(orient='records'))
+
+            for i in range(len(indices) - 1):
+                df_temp = df.iloc[indices[i]:indices[i + 1]]
+                key = df_temp.iloc[0]['control']
+                df_temp = df_temp.drop(columns=['control'])
+                df_dict[key] = df_temp.to_dict(orient='records')
+
+            return jsonify(df_dict)
+        else:
+            return jsonify(df.to_dict(orient='records'))
+        
 
     except requests.RequestException as e:
         return jsonify({"error": str(e)}), 500
