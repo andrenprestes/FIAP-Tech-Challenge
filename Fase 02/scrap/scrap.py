@@ -3,13 +3,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from flask import jsonify
 from datetime import datetime
-import pandas as pd
 from dotenv import load_dotenv
-import os
-import time
-
 from s3_bucket_manager.manager import save_dataframe_to_parquet, ensure_bucket_exists, create_bucket
 from .browser_detection import get_browser_driver
+import os
+import time
+import pandas as pd
 
 load_dotenv()
 
@@ -22,6 +21,33 @@ download_dir = os.path.join(current_folder_path, "IBOVDia")
 url = "https://sistemaswebb3-listados.b3.com.br/indexPage/day/IBOV?language=pt-br"
 
 def get_ibov_data():
+    """
+    Scrapes IBOVESPA data from a specified webpage, processes it, and saves it to an S3 bucket in Parquet format.
+
+    The function automates the process of navigating to a webpage, downloading a CSV file, 
+    processing it into a DataFrame, and uploading the resulting data to an S3 bucket. It 
+    also ensures the S3 bucket exists before saving the data.
+
+    Steps:
+        1. Navigate to the IBOVESPA data page.
+        2. Click on the download button to retrieve a CSV file.
+        3. Process the downloaded CSV file into a DataFrame.
+        4. Ensure the specified S3 bucket exists or create it if necessary.
+        5. Save the DataFrame to the S3 bucket in Parquet format with daily partitions.
+        6. Remove the downloaded CSV file from the local system.
+
+    Returns:
+        flask.Response: A Flask JSON response with a success or error message and appropriate HTTP status code.
+
+    Raises:
+        Exception: Captures any errors during the scraping, file processing, or S3 operations, 
+        returning an error message in the response.
+
+    Notes:
+        - The `download_dir` is defined as a subfolder named "IBOVDia" in the current working directory.
+        - The `S3_BUCKET_NAME` is loaded from environment variables.
+        - The function quits the WebDriver instance at the end, whether successful or not.
+    """
     try:
         print("Iniciando o processo de coleta de dados...")
         driver.get(url)
