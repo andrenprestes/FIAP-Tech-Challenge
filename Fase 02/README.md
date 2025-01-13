@@ -20,7 +20,8 @@ A arquitetura do pipeline segue o seguinte fluxo:
    - **Glue Catalog**: Os dados refinados são catalogados automaticamente para consulta no Amazon Athena.
    - **Amazon Athena**: Os dados ficam disponíveis para consulta e análise pelo cliente final.
 
-![Arquitetura](https://user-images.githubusercontent.com/path/to/your/image.png)
+![Arquitetura](https://github.com/user-attachments/assets/9f71013d-8e1f-45c6-a737-37dd82c9b005)
+
 
 ## Requisitos Atendidos
 
