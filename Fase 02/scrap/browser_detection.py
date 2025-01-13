@@ -1,4 +1,3 @@
-
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.firefox.service import Service as FirefoxService
@@ -15,6 +14,32 @@ current_folder_path = os.getcwd()
 download_dir = current_folder_path + "\\IBOVDia"
 
 def get_browser_driver():
+    """
+    Configures and returns a WebDriver instance for the desired browser.
+
+    The browser is determined by the `BROWSER` environment variable, which can be set to 
+    "chrome", "firefox", or "edge". If no value is set, "chrome" is used as the default.
+
+    Each browser driver is configured to run in headless mode and sets up a default 
+    download directory. The download directory is defined as a subfolder named 
+    "IBOVDia" in the current working directory.
+
+    Returns:
+        selenium.webdriver.Chrome or selenium.webdriver.Firefox or selenium.webdriver.Edge: 
+            The configured WebDriver instance for the specified browser.
+
+    Raises:
+        ValueError: If the specified browser in the `BROWSER` environment variable is not supported.
+
+    Notes:
+        - For Chrome and Edge, the download preferences include:
+          * Default download directory set to `download_dir`.
+          * Automatic download without prompt.
+          * Safe browsing enabled.
+        - For Firefox, preferences include:
+          * Default download directory set to `download_dir`.
+          * Automatic handling of CSV downloads without prompt.
+    """
     # Configuração para o Chrome
     chrome_options = ChromeOptions()
     chrome_options.add_argument("--headless")  # Rodar em modo headless
