@@ -78,7 +78,14 @@ A arquitetura do pipeline segue o seguinte fluxo:
    - Instale as dependências necessárias para executar o script de scraping.
 
 2. **Execução do Script de Scrap**:
-   - Execute o script Python para baixar os dados da B3 e salvar no bucket raw do S3.
+   - Execute o script Python app.py.
+   - Utilize a rota de /login para gerar o token de acesso.
+     ex:
+         {
+             "username": "admin",
+             "password": "senha123"
+         }
+   - Use o token de acesso para fazer a requisição para a rota /bovespaDay que faz download dos dados do site da bovespa e manda em formato parquet para o bucket raw na S3.
 
 3. **Processamento Automático**:
    - O pipeline será executado automaticamente, acionado pela inserção de novos dados no bucket raw.
