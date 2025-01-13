@@ -22,6 +22,35 @@
 import boto3
 
 def list_glue_jobs():
+    """
+    Lists all jobs available in AWS Glue and prints their names.
+
+    This function initializes a Glue client using the boto3 library, retrieves 
+    the list of all job names configured in the AWS Glue service, and prints 
+    them to the console. If no jobs are found, it displays a message indicating 
+    that no jobs exist. If an error occurs during the process, the function 
+    handles the exception and logs an error message.
+
+    Returns:
+        list: A list of job names (strings) from AWS Glue. Returns an empty 
+        list if no jobs are found or if an error occurs.
+
+    Raises:
+        Exception: Captures and logs any exception raised during the 
+        communication with the AWS Glue service.
+
+    Dependencies:
+        - boto3: Ensure the AWS SDK for Python is installed and properly 
+          configured with the necessary credentials and permissions to access 
+          AWS Glue.
+          
+    Notes:
+        - The function uses the default AWS credentials and region configured 
+          in the environment or AWS configuration files.
+        - Ensure that the IAM role or user has permissions to access the 
+          `glue:ListJobs` API.
+
+    """
     # Inicializar o cliente do Glue
     glue_client = boto3.client('glue')
 
