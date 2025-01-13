@@ -1,27 +1,92 @@
-import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
+"""
+Módulo para operações com o AWS S3 e manipulação de arquivos Parquet.
 
+Este módulo fornece funções utilitárias para interagir com buckets do AWS S3,
+realizar operações como upload, download, exclusão e listagem de arquivos,
+bem como salvar um DataFrame em formato Parquet com partições diárias.
+
+Dependências:
+    - boto3: Biblioteca para interagir com serviços da AWS.
+    - botocore: Utilizada para lidar com exceções específicas do cliente AWS.
+    - pandas: Para manipulação de DataFrames.
+    - pyarrow: Para conversão de DataFrames em arquivos Parquet.
+    - os: Para manipulação de caminhos de arquivos e diretórios.
+
+Funções:
+    - get_s3_client(): Retorna um cliente S3 usando boto3.
+    - get_region(): Obtém a região padrão da sessão atual do AWS.
+    - ensure_bucket_exists(bucket_name): Verifica se um bucket existe, criando-o se necessário.
+    - create_bucket(bucket_name): Cria um bucket no S3.
+    - check_bucket_exists(bucket_name): Verifica se um bucket existe no S3.
+    - upload_file(bucket_name, file_path, s3_key): Faz upload de um arquivo local para o S3.
+    - download_file(bucket_name, s3_key, file_path): Baixa um arquivo do S3 para o local.
+    - list_files(bucket_name, prefix=""): Lista arquivos em um bucket com um prefixo opcional.
+    - delete_file(bucket_name, s3_key): Exclui um arquivo específico de um bucket.
+    - delete_folder(bucket_name, folder_name): Exclui todos os arquivos em uma pasta no bucket.
+    - file_exists(bucket_name, s3_key): Verifica se um arquivo específico existe no bucket.
+    - delete_bucket(bucket_name): Exclui um bucket S3 vazio.
+    - empty_bucket(bucket_name): Remove todos os arquivos de um bucket.
+    - save_dataframe_to_parquet(df, bucket_name, s3_path): Salva um DataFrame como Parquet no S3, criando partições diárias.
+
+Observações:
+    - As funções lidam com exceções comuns como credenciais ausentes (NoCredentialsError) e erros do cliente (ClientError).
+    - Para salvar um DataFrame como Parquet, a função `save_dataframe_to_parquet` manipula colunas específicas e formatações,
+      garantindo compatibilidade com o formato Parquet e as partições S3.
+
+Notas importantes:
+    - Certifique-se de configurar corretamente suas credenciais AWS antes de usar este módulo.
+    - Garanta que os nomes de buckets e chaves estejam corretos e sejam consistentes com seu ambiente.
+"""
+from botocore.exceptions import NoCredentialsError, ClientError
+import pyarrow.parquet as pq
+import pyarrow as pa
 import pandas as pd
 import boto3
 import os
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 current_folder_path = os.getcwd()
 download_dir = os.path.join(current_folder_path, "IBOVDia")
 
 def get_s3_client():
+    """
+    Returns an S3 client using the boto3 library.
+
+    Returns:
+        boto3.client: Configured S3 client for the current AWS session.
+    """
     return boto3.client('s3')
 
 def get_region():
+    """
+    Retrieves the default region configured in the current AWS session.
+
+    Returns:
+        str: Default AWS region for the current session.
+    """
     return boto3.session.Session().region_name
 
 def ensure_bucket_exists(bucket_name):
+    """
+    Checks if an S3 bucket exists and creates it if it does not.
+
+    Args:
+        bucket_name (str): Name of the S3 bucket to check/create.
+    """
     if not check_bucket_exists(bucket_name):
         print(f"Bucket {bucket_name} não existe. Criando...")
         create_bucket(bucket_name)
 
 def create_bucket(bucket_name):
+    """
+    Creates an S3 bucket.
+
+    Args:
+        bucket_name (str): Name of the bucket to create.
+
+    Raises:
+        NoCredentialsError: If AWS credentials are not found.
+        Exception: For other errors during bucket creation.
+    """
     try:
         s3_client = get_s3_client()
         s3_client.create_bucket(Bucket=bucket_name)
@@ -32,6 +97,18 @@ def create_bucket(bucket_name):
         print(f'Erro ao criar o bucket: {e}')
 
 def check_bucket_exists(bucket_name):
+    """
+    Checks if an S3 bucket exists.
+
+    Args:
+        bucket_name (str): Name of the S3 bucket to check.
+
+    Returns:
+        bool: True if the bucket exists, False otherwise.
+
+    Raises:
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         s3_client = get_s3_client()
         s3_client.head_bucket(Bucket=bucket_name)
@@ -46,6 +123,18 @@ def check_bucket_exists(bucket_name):
             return False
 
 def upload_file(bucket_name, file_path, s3_key):
+    """
+    Uploads a local file to an S3 bucket.
+
+    Args:
+        bucket_name (str): Name of the destination S3 bucket.
+        file_path (str): Local path of the file to upload.
+        s3_key (str): S3 key (path in the bucket) for the uploaded file.
+
+    Raises:
+        NoCredentialsError: If AWS credentials are not found.
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         s3_client = get_s3_client()
         s3_client.upload_file(file_path, bucket_name, s3_key)
@@ -56,6 +145,17 @@ def upload_file(bucket_name, file_path, s3_key):
         print(f"Erro ao fazer upload: {e}")
 
 def download_file(bucket_name, s3_key, file_path):
+    """
+    Downloads a file from an S3 bucket to the local system.
+
+    Args:
+        bucket_name (str): Name of the S3 bucket.
+        s3_key (str): S3 key (path in the bucket) of the file to download.
+        file_path (str): Local path where the file will be saved.
+
+    Raises:
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         s3_client = get_s3_client()
         s3_client.download_file(bucket_name, s3_key, file_path)
@@ -64,6 +164,19 @@ def download_file(bucket_name, s3_key, file_path):
         print(f"Erro ao fazer download: {e}")
 
 def list_files(bucket_name, prefix=""):
+    """
+    Lists files in an S3 bucket, optionally filtered by a prefix.
+
+    Args:
+        bucket_name (str): Name of the S3 bucket.
+        prefix (str, optional): Prefix to filter files. Defaults to "".
+
+    Returns:
+        list[str]: List of file keys found in the bucket.
+
+    Raises:
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         s3_client = get_s3_client()
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
@@ -81,6 +194,16 @@ def list_files(bucket_name, prefix=""):
         return []
 
 def delete_file(bucket_name, s3_key):
+    """
+    Deletes a specific file from an S3 bucket.
+
+    Args:
+        bucket_name (str): Name of the S3 bucket.
+        s3_key (str): S3 key (path in the bucket) of the file to delete.
+
+    Raises:
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         s3_client = get_s3_client()
         s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
@@ -89,6 +212,16 @@ def delete_file(bucket_name, s3_key):
         print(f"Erro ao excluir arquivo: {e}")
 
 def delete_folder(bucket_name, folder_name):
+    """
+    Deletes all files within a folder in an S3 bucket.
+
+    Args:
+        bucket_name (str): Name of the S3 bucket.
+        folder_name (str): Name of the folder (prefix) to delete.
+
+    Raises:
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         files = list_files(bucket_name, prefix=folder_name)
         for file in files:
@@ -98,6 +231,19 @@ def delete_folder(bucket_name, folder_name):
         print(f"Erro ao excluir pasta: {e}")
 
 def file_exists(bucket_name, s3_key):
+    """
+    Checks if a specific file exists in an S3 bucket.
+
+    Args:
+        bucket_name (str): Name of the S3 bucket.
+        s3_key (str): S3 key (path in the bucket) of the file to check.
+
+    Returns:
+        bool: True if the file exists, False otherwise.
+
+    Raises:
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         s3_client = get_s3_client()
         s3_client.head_object(Bucket=bucket_name, Key=s3_key)
@@ -112,6 +258,15 @@ def file_exists(bucket_name, s3_key):
             return False
 
 def delete_bucket(bucket_name):
+    """
+    Deletes an empty S3 bucket.
+
+    Args:
+        bucket_name (str): Name of the bucket to delete.
+
+    Raises:
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         s3_client = get_s3_client()
         s3_client.delete_bucket(Bucket=bucket_name)
@@ -120,6 +275,15 @@ def delete_bucket(bucket_name):
         print(f"Erro ao excluir o bucket: {e}")
 
 def empty_bucket(bucket_name):
+    """
+    Removes all files from an S3 bucket.
+
+    Args:
+        bucket_name (str): Name of the bucket to clear.
+
+    Raises:
+        ClientError: If there is an error with the AWS client.
+    """
     try:
         files = list_files(bucket_name)
         for file in files:
@@ -130,11 +294,15 @@ def empty_bucket(bucket_name):
 
 def save_dataframe_to_parquet(df, bucket_name, s3_path):
     """
-    Salva um DataFrame como um arquivo Parquet em um bucket do S3 com partição diária.
+    Saves a DataFrame as a Parquet file to S3 with daily partitioning.
 
-    :param df: DataFrame a ser salvo
-    :param bucket_name: Nome do bucket no S3
-    :param s3_path: Caminho no bucket S3 onde o arquivo deve ser salvo
+    Args:
+        df (pandas.DataFrame): DataFrame to save.
+        bucket_name (str): Name of the S3 bucket.
+        s3_path (str): S3 path where the file will be saved.
+
+    Raises:
+        Exception: For general errors during processing or upload.
     """
     try:
         df['Date'] = pd.Timestamp.today().strftime('%Y-%m-%d')
