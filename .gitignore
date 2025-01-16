@@ -1,0 +1,53 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+*.out
+
+# Docker files
+*.pid
+*.log
+*.pid.lock
+
+# Ignore Docker-related files
+docker-compose.override.yml
+.env
+.env.*
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+*.cover
+*.py,cover
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Ignore database
+*.sqlite3
+*.db
+
+# Ignore IDE specific files
+.idea/
+.vscode/
+
+# Ignore files with personal credentials or configuration
+config.json
+secrets.json
