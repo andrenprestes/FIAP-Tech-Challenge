@@ -8,10 +8,13 @@ from selenium.webdriver.edge.options import Options as EdgeOptions
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.firefox import GeckoDriverManager
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
+from pathlib import Path
 import os
 
-current_folder_path = os.getcwd()
-download_dir = current_folder_path + "\\IBOVDia"
+download_dir = Path("IBOVdia").resolve()
+download_dir.mkdir(exist_ok=True)
+
+print(f"Diretório de download configurado: {download_dir}")
 
 def get_browser_driver():
     """
@@ -45,7 +48,7 @@ def get_browser_driver():
     chrome_options.add_argument("--headless")  # Rodar em modo headless
     chrome_options.add_argument("--disable-gpu")  # Opcional: desabilitar GPU, se necessário
     chrome_prefs = {
-        "download.default_directory": download_dir,
+        "download.default_directory": str(download_dir),
         "download.prompt_for_download": False,
         "directory_upgrade": True,
         "safebrowsing.enabled": True
@@ -56,14 +59,14 @@ def get_browser_driver():
     firefox_options = FirefoxOptions()
     firefox_options.add_argument("--headless")  # Rodar em modo headless
     firefox_options.set_preference("browser.download.folderList", 2)
-    firefox_options.set_preference("browser.download.dir", download_dir)
+    firefox_options.set_preference("browser.download.dir", str(download_dir))
     firefox_options.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/csv")
     
     # Configuração para o Edge
     edge_options = EdgeOptions()
     edge_options.add_argument("--headless")  # Rodar em modo headless
     edge_prefs = {
-        "download.default_directory": download_dir,
+        "download.default_directory": str(download_dir),
         "download.prompt_for_download": False,
         "directory_upgrade": True,
         "safebrowsing.enabled": True
@@ -79,6 +82,7 @@ def get_browser_driver():
         return driver
     
     elif browser_name == "firefox":
+        firefox_options.binary_location = "/usr/bin/firefox"
         driver = webdriver.Firefox(service=FirefoxService(GeckoDriverManager().install()), options=firefox_options)
         print("Driver do Firefox iniciado com sucesso!")
         return driver

@@ -1,107 +1,126 @@
 # Pipeline de Dados Batch Bovespa
 
 ## Descrição
-Este projeto tem como objetivo construir um pipeline de dados completo para a ingestão, processamento e análise de dados da Bovespa (B3) utilizando serviços serverless da AWS. O pipeline realiza desde a extração dos dados no site oficial da B3 até a disponibilização de dados processados e analisáveis no Amazon Athena.
+Este projeto implementa um pipeline de dados automatizado para ingestão, processamento e análise de dados financeiros do índice Bovespa (B3). O pipeline foi projetado para ser escalável e utiliza serviços serverless da AWS. Ele abrange desde o web scraping no site oficial da B3 até a disponibilização dos dados processados no Amazon Athena para consultas analíticas.
 
 ## Arquitetura
-A arquitetura do pipeline segue o seguinte fluxo:
+A arquitetura do pipeline segue as etapas descritas abaixo:
 
-1. **Scrap de dados do site oficial da B3**:
-   - Um script Python realiza a extração de dados do pregão da B3 e os salva em formato Parquet.
-   - Os dados são particionados diariamente.
+1. **Extração de Dados**:
+   - O script em Python utiliza Selenium para coletar os dados diários do pregão da B3 no site oficial.
+   - Os dados são convertidos e armazenados em formato Parquet.
 
-2. **AWS Cloud Pipeline**:
-   - **Raw Bucket (S3)**: Os dados extraídos são ingeridos no Amazon S3.
-   - **Lambda Trigger**: Uma função Lambda é acionada automaticamente após a ingestão dos dados no bucket, iniciando um job no AWS Glue.
-   - **AWS Glue (ETL)**: O job Glue realiza as transformações necessárias, incluindo:
-     - Agrupamentos, sumarizações e cálculos com campos de data.
-     - Renomeiação de colunas.
-   - **Refined Bucket (S3)**: Os dados processados são armazenados em formato Parquet, particionados por data e pela abreviação da ação do pregão da Bolsa.
-   - **Glue Catalog**: Os dados refinados são catalogados automaticamente para consulta no Amazon Athena.
-   - **Amazon Athena**: Os dados ficam disponíveis para consulta e análise pelo cliente final.
+2. **Ingestão e Armazenamento no Amazon S3**:
+   - Os dados brutos são enviados para um bucket no S3, particionados por data de processamento.
+
+3. **Automação com AWS Lambda**:
+   - Uma função Lambda é acionada automaticamente após a inserção de novos arquivos no bucket raw.
+   - A Lambda inicia o job de ETL no AWS Glue.
+
+4. **Transformação no AWS Glue**:
+   - O Glue processa os dados aplicando as seguintes transformações:
+     - Agrupamento e sumarização.
+     - Cálculos com campos de data.
+     - Geração de métricas analíticas.
+
+5. **Armazenamento Refinado no S3**:
+   - Os dados transformados são armazenados no bucket refined em formato Parquet, particionados por data e abreviação da ação.
+
+6. **Catalogação Automática**:
+   - Os dados processados são catalogados no AWS Glue Catalog.
+
+7. **Disponibilização no Amazon Athena**:
+   - Os dados ficam disponíveis no Athena para consultas SQL e análises.
 
 ![Arquitetura](https://github.com/user-attachments/assets/9f71013d-8e1f-45c6-a737-37dd82c9b005)
-
 
 ## Requisitos Atendidos
 
 ### Requisitos Obrigatórios
+1. **Extração de Dados**:
+   - Uso de Selenium para web scraping no site da B3.
 
-1. **Scrap de Dados**
-   - Extração de dados do site da B3 utilizando um script Python.
+2. **Ingestão no S3**:
+   - Dados brutos armazenados em formato Parquet e particionados por data.
 
-2. **Ingestão no S3**
-   - Os dados brutos são salvos em formato Parquet, particionados por data.
+3. **Automação com Lambda**:
+   - A função Lambda monitora o bucket raw e inicia automaticamente o job no AWS Glue.
 
-3. **Trigger Lambda**
-   - Uma função Lambda é acionada automaticamente ao inserir novos dados no bucket raw.
+4. **Transformações no AWS Glue**:
+   - Realiza agrupamento, sumarização e cálculos baseados em data.
+   - Gera métricas como frequência de transações e nível de participação.
 
-4. **Iniciação do Job Glue**
-   - A Lambda inicia o job de ETL no Glue.
+5. **Armazenamento no Bucket Refined**:
+   - Os dados processados são particionados por data e abreviação de ação.
 
-5. **Transformações no Glue (ETL)**
-   - Agrupamento e sumarização.
-   - Renomeação de colunas.
-   - Cálculos com campos de data.
+6. **Catalogação no AWS Glue Catalog**:
+   - Dados catalogados para serem consultados pelo Athena.
 
-6. **Armazenamento Refinado**
-   - Os dados processados são armazenados no bucket refined em formato Parquet.
-   - Particionados por data e abreviação do nome da ação.
-
-7. **Catalogação Automática no Glue Catalog**
-   - Os dados refinados são automaticamente catalogados no banco de dados padrão do Glue.
-
-8. **Disponibilidade no Athena**
-   - Os dados estão legíveis e consultáveis no Amazon Athena.
+7. **Disponibilidade no Athena**:
+   - Dados disponíveis para consultas SQL analíticas.
 
 ### Requisitos Opcionais
-
-- **Notebook no Athena**
-  - Análise dos dados no Athena utilizando notebooks gráficos.
+- **Notebooks no Athena**:
+  - Exploração de dados com notebooks visuais no Athena.
 
 ## Tecnologias Utilizadas
-
-- **AWS Services**:
+- **AWS**:
   - Amazon S3
   - AWS Lambda
   - AWS Glue
   - AWS Glue Catalog
   - Amazon Athena
-- **Python**
+- **Python**:
   - Selenium para web scraping.
-  - Bibliotecas para processamento e salva de dados em Parquet.
+  - Pandas e PyArrow para processamento de dados.
+  - Boto3 para interação com serviços AWS.
 
 ## Como Executar o Projeto
 
-1. **Configuração Inicial**:
-   - Configure sua conta AWS com permissões adequadas para S3, Lambda, Glue e Athena.
-   - Instale as dependências necessárias para executar o script de scraping.
+### 1. Configuração Inicial
+- Configure sua conta AWS com permissões adequadas para S3, Lambda, Glue e Athena.
+- Instale as dependências Python:
+  ```bash
+  pip install -r requirements.txt
+  ```
+- Defina as variáveis de ambiente:
+  - `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` para autenticação.
+  - Nome do bucket S3 para os dados brutos e refinados.
 
-2. **Execução do Script de Scrap**:
-   - Execute o script Python app.py.
-   - Utilize a rota de /login para gerar o token de acesso.
-     ex:
-         {
-             "username": "admin",
-             "password": "senha123"
-         }
-   - Use o token de acesso para fazer a requisição para a rota /bovespaDay que faz download dos dados do site da bovespa e manda em formato parquet para o bucket raw na S3.
+### 2. Execução do Script de Scrap
+- Execute o script de scraping para baixar os dados:
+  ```bash
+  python app.py
+  ```
+- Rotas da API:
+  - **/login**: Autenticação e geração de token.
+    Exemplo:
+    ```json
+    {
+      "username": "admin",
+      "password": "senha123"
+    }
+    ```
+  - **/bovespaDay**: Faz o download dos dados e envia para o bucket raw.
 
-3. **Processamento Automático**:
-   - O pipeline será executado automaticamente, acionado pela inserção de novos dados no bucket raw.
+### 3. Processamento Automático
+- O pipeline é acionado automaticamente:
+  - A função Lambda inicia o job no Glue.
+  - Dados processados são armazenados no bucket refined.
 
-4. **Consulta e Análise**:
-   - Acesse o Amazon Athena para consultar e analisar os dados processados.
+### 4. Consulta e Análise
+- Use o Amazon Athena para consultar os dados transformados:
+  - Acesse o console do Athena.
+  - Execute consultas SQL para explorar os dados.
 
 ## Estrutura do Repositório
-
-```
+```plaintext
 /
 |-- README.md
 |-- app.py
 |-- scrap/
 |   |-- __init__.py
-|   |-- browser_detection.py 
+|   |-- browser_detection.py
 |   |-- scrap.py
 |-- s3_bucket_manager/
 |   |-- __init__.py
@@ -109,11 +128,8 @@ A arquitetura do pipeline segue o seguinte fluxo:
 |-- lambda_handler/
 |   |-- lambda_handler.py
 |-- glue/
-|   |-- agr_com.sql
-|-- IBOVDia/
-|   |-- pla.txt
+|   |-- transformations.sql
 ```
 
 ## Licença
-
 Este projeto está licenciado sob a [MIT License](LICENSE).

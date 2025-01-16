@@ -1,101 +1,156 @@
+import os
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from flask import jsonify
 from datetime import datetime
 from dotenv import load_dotenv
-from s3_bucket_manager.manager import save_dataframe_to_parquet, ensure_bucket_exists, create_bucket
+from s3_bucket_manager.manager import save_dataframe_to_parquet, ensure_bucket_exists
 from .browser_detection import get_browser_driver
-import os
-import time
+from pathlib import Path
 import pandas as pd
+import time
 
+# Carregar variáveis de ambiente
 load_dotenv()
 
+# Configuração do driver e diretório
 driver = get_browser_driver()
+download_dir = Path("IBOVdia").resolve()
+download_dir.mkdir(exist_ok=True)
 
-current_folder_path = os.getcwd()
-download_dir = os.path.join(current_folder_path, "IBOVDia")
+print(f"Diretório configurado: {download_dir}")
 
 # URL da página
 url = "https://sistemaswebb3-listados.b3.com.br/indexPage/day/IBOV?language=pt-br"
 
-def get_ibov_data():
+def transform_dataframe(df, data_str):
     """
-    Scrapes IBOVESPA data from a specified webpage, processes it, and saves it to an S3 bucket in Parquet format.
+    Aplica transformações no DataFrame para padronizar e preparar os dados.
 
-    The function automates the process of navigating to a webpage, downloading a CSV file, 
-    processing it into a DataFrame, and uploading the resulting data to an S3 bucket. It 
-    also ensures the S3 bucket exists before saving the data.
-
-    Steps:
-        1. Navigate to the IBOVESPA data page.
-        2. Click on the download button to retrieve a CSV file.
-        3. Process the downloaded CSV file into a DataFrame.
-        4. Ensure the specified S3 bucket exists or create it if necessary.
-        5. Save the DataFrame to the S3 bucket in Parquet format with daily partitions.
-        6. Remove the downloaded CSV file from the local system.
+    Args:
+        df (pd.DataFrame): DataFrame lido do CSV.
+        data_str (str): Data extraída do nome do arquivo para ser adicionada ao DataFrame.
 
     Returns:
-        flask.Response: A Flask JSON response with a success or error message and appropriate HTTP status code.
+        pd.DataFrame: DataFrame transformado e padronizado.
+    """
+    try:
+        print("Transformando DataFrame...")
 
-    Raises:
-        Exception: Captures any errors during the scraping, file processing, or S3 operations, 
-        returning an error message in the response.
+        df.reset_index(inplace=True)
+        columns = df.columns
+        columns = df.columns[1:].to_list()
+        columns.append("nan")
+        df.columns = columns
+        if df.iloc[:, -1].isna().all():
+            df = df.iloc[:, :-1]
 
-    Notes:
-        - The `download_dir` is defined as a subfolder named "IBOVDia" in the current working directory.
-        - The `S3_BUCKET_NAME` is loaded from environment variables.
-        - The function quits the WebDriver instance at the end, whether successful or not.
+        print("DataFrame inicial:")
+        print(df.head(10))  # Mostrar os primeiros 10 registros para debug
+
+        # Ajustar nomes das colunas
+        df.columns = ["Codigo", "Acao", "Tipo", "Qtde_Teorica", "Part"]
+        print("DataFrame após ajuste das colunas:")
+        print(df.head(10))
+
+        # Remover últimas linhas irrelevantes
+        df = df.iloc[:-2]
+        print("DataFrame após remoção de linhas irrelevantes:")
+        print(df.tail(10))  # Mostrar as últimas 10 linhas
+
+        # Adicionar coluna de data extraída do nome do arquivo
+        df["Data"] = pd.to_datetime(data_str, format='%d-%m-%y')
+        print("DataFrame após adição da coluna de data:")
+        print(df.head(10))
+
+        # Converter colunas numéricas
+        df["Qtde_Teorica"] = df["Qtde_Teorica"].str.replace(".", "", regex=False).astype(float)
+        df["Part"] = df["Part"].str.replace(",", ".", regex=False).astype(float)
+        print("DataFrame após conversão de colunas numéricas:")
+        print(df.head(10))
+
+        return df
+
+    except Exception as e:
+        print(f"Erro ao transformar o DataFrame: {e}")
+        raise
+
+
+def process_csv_to_raw(csv_file_path, bucket_name):
+    """
+    Processa o arquivo CSV e salva os dados na camada raw do S3.
+    """
+    try:
+        print(f"Lendo arquivo CSV: {csv_file_path}")
+
+        # Extrair a data do nome do arquivo
+        file_name = csv_file_path.name  # Nome do arquivo
+        data_str = file_name.split("_")[1].split(".")[0]  # Extraindo a parte da data
+        print(f"Data extraída do nome do arquivo: {data_str}")
+
+        # Ler o arquivo CSV
+        df = pd.read_csv(csv_file_path, encoding='ISO-8859-1', sep=';', header=1, index_col=0)
+        print("DataFrame após leitura inicial:")
+        print(df.head(10))  # Mostrar os primeiros 10 registros após a leitura
+
+        # Transformar os dados
+        df = transform_dataframe(df, data_str)
+
+        # Garantir que o bucket existe
+        ensure_bucket_exists(bucket_name)
+
+        # Salvar no S3
+        save_dataframe_to_parquet(df, bucket_name, s3_path="raw")
+        print("Dados processados e salvos no S3 com sucesso!")
+
+    except Exception as e:
+        print(f"Erro ao processar o CSV: {e}")
+        raise
+
+def get_ibov_data():
+    """
+    Realiza o scrap dos dados da página da B3 e salva no S3.
     """
     try:
         print("Iniciando o processo de coleta de dados...")
         driver.get(url)
 
-        print("Downloading...")
-        # Esperar até que o botão de download esteja visível e clicável
-        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//a[@href="/indexPage/day/IBOV?language=pt-br"]'))).click()
+        # Remover arquivos antigos
+        print("Limpando arquivos antigos...")
+        for file in download_dir.iterdir():
+            if file.suffix == ".csv":
+                print(f"Removendo arquivo antigo: {file}")
+                file.unlink()
 
-        time.sleep(10)  # Ajuste conforme necessário para garantir que o CSV seja baixado
-        print("Processando...")
-        csv_files = [f for f in os.listdir(download_dir) if f.startswith('IBOVDia_') and f.endswith('.csv')]
+        print("Tentando clicar no botão de download...")
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//a[@href="/indexPage/day/IBOV?language=pt-br"]'))
+        ).click()
 
-        if csv_files:
-            print("Pegando ultimo arquivo...")
-            latest_file = max(csv_files, key=lambda f: datetime.strptime(f, 'IBOVDia_%d-%m-%y.csv'))
-            data = latest_file.split("_")[1].split(".")[0]  # Extração correta da data
-            latest_file_path = os.path.join(download_dir, latest_file)
+        # Aguarde o download
+        time.sleep(15)
 
-            print("Lendo como dataframe...")
-            df = pd.read_csv(latest_file_path, encoding='ISO-8859-1', sep=';', header=1, index_col=None)
-            df.reset_index(inplace=True)
-            columns = df.columns[1:].to_list()
-            columns.append("nan")
-            df.columns = columns
-            
-            
-            if df.iloc[:, -1].isna().all():
-                df = df.iloc[:, :-1]
+        # Identificar o arquivo baixado
+        csv_files = [f for f in download_dir.iterdir() if f.suffix == ".csv"]
+        if not csv_files:
+            print("Nenhum arquivo CSV encontrado no diretório.")
+            return {"msg": "Nenhum arquivo CSV encontrado após download."}, 500
 
-            # Adicionando coluna 'date' com partição diária
-            df = df.iloc[:-2]
-            print("Criando/verificando bucket...")
+        latest_file = max(csv_files, key=lambda f: f.stat().st_mtime)
+        print(f"Arquivo mais recente: {latest_file}")
 
-            # Criar/verificar bucket no S3
-            bucket_name = os.getenv("S3_BUCKET_NAME")
-            ensure_bucket_exists(bucket_name)
+        # Processar o arquivo para o S3
+        process_csv_to_raw(latest_file, os.getenv("S3_BUCKET_NAME"))
 
+        # Remover o arquivo local
+        latest_file.unlink()
+        print("Arquivo local removido.")
 
-            save_dataframe_to_parquet(df, bucket_name, "raw")
-            print(latest_file_path)
-            os.remove(latest_file_path)
-
-        else:
-            return jsonify({"msg": "Nenhum arquivo CSV encontrado após download no site da IBOVESPA!"}), 500
+        return {"msg": "Dados processados e salvos com sucesso no S3."}, 200
 
     except Exception as e:
-        return jsonify({"msg": f"Erro ao obter dados: {e}"}), 500
+        print(f"Erro ao obter dados: {e}")
+        return {"msg": f"Erro ao obter dados: {e}"}, 500
 
     finally:
         driver.quit()
-        return jsonify({"msg": f"Dados salvos no S3 em formato Parquet com partições diárias!"}), 200

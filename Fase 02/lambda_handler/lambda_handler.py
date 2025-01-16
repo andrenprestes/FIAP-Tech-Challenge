@@ -43,7 +43,7 @@ def lambda_handler(event, context):
     Observação:
         Certifique-se de que o nome do job no código corresponde exatamente ao nome do job configurado no AWS Glue.
     """
-    glue_job_name = "Glue TECH CHALLENGE 2 "
+    glue_job_name = "glue-job-batch-bovespa"
     glue_client = boto3.client('glue')
     
     try:
