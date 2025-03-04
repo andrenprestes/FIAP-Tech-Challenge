@@ -1,6 +1,6 @@
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required
 from flask import Flask, jsonify, request
-from coinGecko.fill_db import fill_db, get_curret_data
+from coinGecko.fill_db import fill_db, get_curret_data, process_historic_data
 
 app = Flask(__name__)
 
@@ -96,6 +96,34 @@ def get_current_value():
             - Em caso de falha ao obter os dados, retorna um erro com status HTTP 500 (Internal Server Error).
     """
     get_curret_data()
+
+@app.route('/process_data')
+@jwt_required()
+def process_data():
+    """
+    Endpoint protegido para processar os dados históricos de uma criptomoeda.
+
+    Este endpoint exige um token de acesso JWT válido para ser acessado. Quando chamado, ele lê os dados históricos
+    armazenados no S3, processa as informações para serem utilizadas no treinamento de um modelo e salva os dados
+    processados em um novo bucket no S3.
+
+    Headers:
+        Authorization: Bearer <token>
+
+    Returns:
+        JSON:
+            - Se o processamento for bem-sucedido:
+            {
+                "msg": "Dados processados e salvos no S3 com sucesso!"
+            }, com status HTTP 200 (OK).
+
+            - Em caso de falha no processamento, retorna:
+            {
+                "msg": "Erro ao processar dados históricos: <detalhes do erro>"
+            }, com status HTTP 500 (Internal Server Error).
+    """
+    process_historic_data()
+
 
 
 if __name__ == '__main__':

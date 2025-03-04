@@ -127,3 +127,44 @@ def get_curret_data():
     except Exception as e:
         print(f"Erro inesperado: {e}")
         return {"msg": f"Erro inesperado: {e}"}, 500
+    
+def process_historic_data():
+    """
+    Lê os dados do bucket 'coinGecko_historic', processa para uso em treinamento de um modelo
+    e os salva no bucket 'processed_historic'.
+    """
+    source_bucket = "coinGecko_historic"
+    destination_bucket = "processed_historic"
+    s3_path = "historic"
+
+    try:
+        # Carregar dados brutos do S3
+        df_raw = load_parquet_from_s3(source_bucket, s3_path)
+        print("Dados históricos carregados com sucesso!")
+
+        # Processamento dos dados
+        df_processed = df_raw.copy()
+
+        # Ordenar por data
+        df_processed.sort_values(by="date", inplace=True)
+
+        # Criar colunas de features (médias móveis)
+        df_processed["price_ma_7"] = df_processed["price"].rolling(window=7).mean()  # Média móvel de 7 dias
+        df_processed["price_ma_30"] = df_processed["price"].rolling(window=30).mean()  # Média móvel de 30 dias
+
+        # Remover valores NaN gerados pelas médias móveis
+        df_processed.dropna(inplace=True)
+
+        # Garantir que o bucket de destino existe
+        ensure_bucket_exists(destination_bucket)
+
+        # Salvar dados processados no bucket de destino
+        save_dataframe_to_parquet(df_processed, destination_bucket, s3_path="processed_historic")
+        print("Dados processados e salvos no S3 com sucesso!")
+
+        return {"msg": "Dados processados e salvos no S3 com sucesso!"}, 200
+
+    except Exception as e:
+        print(f"Erro ao processar dados históricos: {e}")
+        return {"msg": f"Erro ao processar dados históricos: {e}"}, 500
+
