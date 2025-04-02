@@ -41,6 +41,10 @@ Os seguintes modelos foram testados para prever os preços do Bitcoin:
 
 O modelo LSTM apresentou o melhor desempenho em termos de precisão, seguido pelo ARIMA e, por último, o Prophet. As previsões são apresentadas em um dashboard interativo, permitindo que os usuários explorem as tendências de preços de forma intuitiva.
 
+[Acesse o dashboard](https://bitcoin-price-prediction-dashboard.streamlit.app/)
+
+[Acesse o repositório do dashboard](https://github.com/lis-r-barreto/bitcoin-price-predictor-app)
+
 ## Contribuições
 
 Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou pull requests.
