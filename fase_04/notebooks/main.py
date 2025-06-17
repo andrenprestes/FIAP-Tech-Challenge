@@ -42,7 +42,10 @@ def get_historical_data(
             )
 
             if df.empty:
-                raise HTTPException(status_code=404, detail=f"No data found for ticker '{ticker}'.")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No data found for ticker '{ticker}'."
+                )
 
             # Reset index to include Date as a column
             df.reset_index(inplace=True)
