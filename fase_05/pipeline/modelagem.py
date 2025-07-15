@@ -21,11 +21,11 @@ Classification Report:
               precision    recall  f1-score   support
 
            0       0.96      0.98      0.97     12852
-           1       0.38      0.27      0.31       677
+           1       0.43      0.22      0.29       677
 
-    accuracy                           0.94     13529
-   macro avg       0.67      0.62      0.64     13529
-weighted avg       0.93      0.94      0.94     13529
+    accuracy                           0.95     13529
+   macro avg       0.70      0.60      0.63     13529
+weighted avg       0.93      0.95      0.94     13529
 
 
 Confusion Matrix:
@@ -81,7 +81,7 @@ def treinar_modelo_supervisionado(df):
     # scale_pos_weight = len(y_train_bal[y_train_bal == 0]) / len(y_train_bal[y_train_bal == 1])
     clf = XGBClassifier(
         scale_pos_weight=scale_pos_weight,
-        max_depth=14,
+        max_depth=32,
         learning_rate=0.05,
         n_estimators=300,
         subsample=0.5,
