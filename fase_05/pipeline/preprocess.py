@@ -1,4 +1,3 @@
-from sklearn.preprocessing import OneHotEncoder
 from nltk.corpus import stopwords
 from collections import Counter
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -7,7 +6,6 @@ import re
 import json
 import unicodedata
 import pandas as pd
-import string
 import nltk
 
 
@@ -123,195 +121,205 @@ def consolidar_dados(prospects, vagas, applicants):
     return pd.DataFrame(registros)
 
 
-def pre_processar(df):
-    nltk.download('stopwords')
-    stopwords_pt = set(stopwords.words('portuguese'))
+# Funções de pré-processamento movidas para fora de pre_processar para serem reutilizáveis
+# e serem aplicadas em diferentes estágios (treino vs. inferência)
 
-    def extrair_keywords_linha(atividades, competencias, n_top=20):
-        """
-        Extrai as principais palavras-chave de uma descrição de vaga (atividades + competências).
+nltk.download('stopwords', quiet=True) # Download once
+stopwords_pt = set(stopwords.words('portuguese'))
+stopwords_custom = {
+    'vaga', 'atividades', 'responsabilidades', 'trabalhar', 'empresa',
+    'experiência', 'profissional', 'atuar', 'área', 'conhecimento',
+    'suporte', 'realizar', 'projetos', 'cliente', 'analista', 'tecnologia',
+    'a', 'o', 'para', 'de', 'sobre', 'por', 'nao', 'aprovado', 'pelo', 'rh',
+    'requisitante', 'sem', 'interesse', 'nesta', 'vaga', 'desistiu', 'da',
+    'contratacao', 'recusado', 'contratado', 'pela', 'decision', 'como', 'hunting',
+    'proposta', 'aceita' # Add more stopwords relevant to your 'situacao_candidado' or other text columns
+}
+stopwords_total = stopwords_pt | stopwords_custom
 
-        Remove stopwords e retorna as `n_top` palavras mais frequentes da linha.
+def extrair_keywords_linha(atividades, competencias, n_top=20):
+    """
+    Extrai as principais palavras-chave de uma descrição de vaga (atividades + competências).
 
-        Argumentos:
-            atividades (str): texto de atividades da vaga
-            competencias (str): texto de competências da vaga
-            n_top (int): número de palavras mais frequentes a retornar
+    Remove stopwords e retorna as `n_top` palavras mais frequentes da linha.
 
-        Retorna:
-            List[str]: lista de palavras-chave extraídas
-        """
-        texto = f"{atividades or ''} {competencias or ''}"
-        texto = texto.lower()
-        texto = re.sub(r'[^a-zà-ú0-9\s]', '', texto)
-        tokens = texto.split()
-        stopwords_pt = set(stopwords.words('portuguese'))
-        stopwords_custom = {
-            'vaga', 'atividades', 'responsabilidades', 'trabalhar', 'empresa',
-            'experiência', 'profissional', 'atuar', 'área', 'conhecimento',
-            'suporte', 'realizar', 'projetos', 'cliente', 'analista', 'tecnologia'
-        }
-        stopwords_total = stopwords_pt | stopwords_custom
-        tokens = [t for t in tokens if t not in stopwords_total and len(t) > 2]
-        mais_frequentes = Counter(tokens).most_common(n_top)
-        keywords = [palavra for palavra, _ in mais_frequentes]
-        return keywords
+    Argumentos:
+        atividades (str): texto de atividades da vaga
+        competencias (str): texto de competências da vaga
+        n_top (int): número de palavras mais frequentes a retornar
+
+    Retorna:
+        List[str]: lista de palavras-chave extraídas
+    """
+    texto = f"{atividades or ''} {competencias or ''}"
+    texto = texto.lower()
+    texto = re.sub(r'[^a-zà-ú0-9\s]', '', texto)
+    tokens = texto.split()
+    tokens = [t for t in tokens if t not in stopwords_total and len(t) > 2]
+    mais_frequentes = Counter(tokens).most_common(n_top)
+    keywords = [palavra for palavra, _ in mais_frequentes]
+    return keywords
 
 
-    def contar_keywords_cv_linha(cv, keywords):
-        """
-        Conta quantas palavras-chave aparecem no CV de cada candidato.
-        """
-        if not isinstance(cv, str):
-            return 0
-        cv = cv.lower()
-        return sum(1 for kw in keywords if kw in cv)
-
-    def calcular_similaridade_cv_atividade(df):
-        """
-        Conta quantas palavras-chave aparecem no texto do CV.
-
-        Argumentos:
-            cv (str): texto do currículo do candidato
-            keywords (List[str]): lista de palavras-chave da vaga
-
-        Retorna:
-            int: quantidade de palavras-chave encontradas no CV
-        """
-        tfidf = TfidfVectorizer(max_features=500)
-
-        textos_candidato = df['cv'].fillna("").astype(str)
-        textos_vaga = df['principais_atividades_vaga'].fillna("").astype(str)
-
-        tfidf_matrix = tfidf.fit_transform(pd.concat([textos_candidato, textos_vaga], ignore_index=True))
-        tfidf_candidato = tfidf_matrix[:len(df)]
-        tfidf_vaga = tfidf_matrix[len(df):]
-
-        similaridades = [cosine_similarity(tfidf_candidato[i], tfidf_vaga[i])[0][0] for i in range(len(df))]
-
-        df['match_cv_atividade'] = similaridades
-        return df
-
-    def match_texto_in_texto(base, alvo):
-        """
-        Verifica se a string `base` está contida na string `alvo`.
-
-        Argumentos:
-            base (str): texto do candidato
-            alvo (str): texto da vaga
-
-        Retorna:
-            int: 1 se contido, 0 caso contrário
-        """
-        if isinstance(base, str) and isinstance(alvo, str):
-            return int(base in alvo)
+def contar_keywords_cv_linha(cv, keywords):
+    """
+    Conta quantas palavras-chave aparecem no CV de cada candidato.
+    """
+    if not isinstance(cv, str):
         return 0
+    cv = cv.lower()
+    return sum(1 for kw in keywords if kw in cv)
 
-    def normalizar_tipo_contratacao(texto):
-        """
-        Normaliza os tipos de contratação da coluna, tratando combinações, sinônimos,
-        capitalização e ordem dos termos.
-        """
-        # 1. Tratamento inicial de valores nulos/vazios
-        if pd.isna(texto) or not isinstance(texto, str) or str(texto).strip() == "":
-            return "vazio"
-        # 2. Converte para string, remove espaços e minúsculas
-        texto = str(texto).strip().lower()
-        # 3. Remover acentos
-        texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
-        # 4. Substituições e padronizações específicas
-        texto = texto.replace('pj/autonomo', 'pj_autonomo')  # Unifica PJ/Autônomo
-        texto = texto.replace('clt full', 'clt_full')  # Padroniza CLT Full
-        texto = texto.replace('clt cotas', 'clt_cotas')  # Padroniza CLT Cotas
-        texto = texto.replace('candidato podera escolher', '')  # Remove frase redundante
-        texto = texto.replace('estagiario', 'estagio')  # Padroniza Estagiário
-        # 5. Remover caracteres não alfanuméricos exceto underscores e espaços
-        texto = re.sub(r'[^a-z0-9_\s]', '', texto)
-        # 6. Compactar múltiplos espaços
-        texto = re.sub(r'\s+', ' ', texto).strip()
-        # 7. Separar os termos, remover vazios e normalizar a ordem para combinações
-        # Ex: 'clt_full pj_autonomo' e 'pj_autonomo clt_full' viram a mesma lista e são ordenadas
-        termos_individuais = sorted(list(set(filter(None, texto.split(' ')))))
-        # Junta os termos novamente com '_' para formar a categoria combinada
-        texto_normalizado = '_'.join(termos_individuais)
-        # 8. Mapeamento final para categorias complexas (se necessário, pode ser mais genérico)
-        # Essas regras são importantes para agrupar categorias que têm várias palavras
-        # mas que você quer tratar como um único tipo.
-        # A ordem é importante: das combinações mais longas para as mais curtas.
-        if "clt_cotas_cooperado_estagio_hunting_pj_autonomo" in texto_normalizado:
-            return "clt_cotas_cooperado_estagio_hunting_pj_autonomo"
-        elif "clt_cotas_cooperado_estagio_pj_autonomo" in texto_normalizado:
-            return "clt_cotas_cooperado_estagio_pj_autonomo"
-        elif "clt_cotas_clt_full_cooperado_estagio_pj_autonomo" in texto_normalizado:
-            return "clt_cotas_clt_full_cooperado_estagio_pj_autonomo"
-        elif "clt_cotas_clt_full_cooperado_pj_autonomo" in texto_normalizado:
-            return "clt_cotas_clt_full_cooperado_pj_autonomo"
-        elif "clt_cotas_clt_full_pj_autonomo" in texto_normalizado:
-            return "clt_cotas_clt_full_pj_autonomo"
-        elif "clt_cotas_pj_autonomo" in texto_normalizado:
-            return "clt_cotas_pj_autonomo"
-        elif "clt_full_cooperado_pj_autonomo" in texto_normalizado:
-            return "clt_full_cooperado_pj_autonomo"
-        elif "clt_full_hunting_pj_autonomo" in texto_normalizado:
-            return "clt_full_hunting_pj_autonomo"
-        elif "cooperado_hunting_pj_autonomo" in texto_normalizado:
-            return "cooperado_hunting_pj_autonomo"
-        elif "cooperado_pj_autonomo" in texto_normalizado:
-            return "cooperado_pj_autonomo"
-        elif "clt_cotas_cooperado" in texto_normalizado:
-            return "clt_cotas_cooperado"
-        elif "clt_cotas_clt_full" in texto_normalizado:
-            return "clt_cotas_clt_full"
-        elif "clt_full_cooperado" in texto_normalizado:
-            return "clt_full_cooperado"
-        elif "clt_full_hunting" in texto_normalizado:
-            return "clt_full_hunting"
-        elif "clt_full_pj_autonomo" in texto_normalizado:
-            return "clt_full_pj_autonomo"
-        elif "pj_autonomo_hunting" in texto_normalizado:
-            return "pj_autonomo_hunting"
-        elif "clt_full" in texto_normalizado:
-            return "clt_full"
-        elif "pj_autonomo" in texto_normalizado:
-            return "pj_autonomo"
-        elif "hunting" in texto_normalizado:
-            return "hunting"
-        elif "cooperado" in texto_normalizado:
-            return "cooperado"
-        elif "clt_cotas" in texto_normalizado:
-            return "clt_cotas"
-        elif "estagio" in texto_normalizado:
-            return "estagio"
+def calcular_similaridade_cv_atividade(df_input):
+    """
+    Calcula a similaridade de cosseno entre o CV do candidato e as principais atividades da vaga.
+    Retorna o DataFrame com a nova coluna 'match_cv_atividade'.
+    """
+    df_temp = df_input.copy() # Avoid SettingWithCopyWarning
+    tfidf = TfidfVectorizer(max_features=500)
 
-        return texto_normalizado if texto_normalizado else "vazio"
+    # Use the original columns for TF-IDF calculation
+    textos_candidato = df_temp['cv'].fillna("").astype(str)
+    textos_vaga = df_temp['principais_atividades_vaga'].fillna("").astype(str)
 
-    def limpa_texto(texto):
-        """
-        Realiza uma série de limpezas em um texto:
-        1. Converte a entrada para string.
-        2. Remove espaços em branco no início e fim.
-        3. Converte para minúsculas.
-        4. Remove acentos.
-        5. Remove caracteres não alfanuméricos (mantém letras, números e espaços).
-        6. Compacta múltiplos espaços em um único espaço.
-        Args:
-            texto (str ou qualquer tipo): O texto a ser limpo.
-        Returns:
-            str: O texto limpo, ou "vazio" se a entrada for inválida/nula.
-        """
-        if pd.isna(texto) or not isinstance(texto, str) or str(texto).strip() == "":
-            return "vazio"  # Retorna "vazio" para NaN, não-strings ou strings vazias/apenas espaços
-        # 1. Converte para string (garante que números, etc., sejam tratados como texto)
-        texto = str(texto)
-        # 2. Remove espaços em branco no início e fim e converte para minúsculas
-        texto = texto.strip().lower()
-        # 3. Remove acentos (normalização Unicode)
-        texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
-        # 4. Remove caracteres não alfanuméricos (mantém letras, números e espaços)
-        texto = re.sub(r'[^a-z0-9\s,]', '', texto)
-        # 5. Compacta múltiplos espaços em um único espaço
-        texto = re.sub(r'\s+', ' ', texto).strip()  # .strip() final para pegar espaços extras criados por re.sub
-        return texto
+    # Fit TF-IDF on the combined text for consistent vocabulary
+    tfidf_matrix = tfidf.fit_transform(pd.concat([textos_candidato, textos_vaga], ignore_index=True))
+    tfidf_candidato = tfidf_matrix[:len(df_temp)]
+    tfidf_vaga = tfidf_matrix[len(df_temp):]
+
+    similaridades = [cosine_similarity(tfidf_candidato[i], tfidf_vaga[i])[0][0] for i in range(len(df_temp))]
+
+    df_temp['match_cv_atividade'] = similaridades
+    return df_temp # Return the modified DataFrame
+
+def match_texto_in_texto(base, alvo):
+    """
+    Verifica se a string `base` está contida na string `alvo`.
+
+    Argumentos:
+        base (str): texto do candidato
+        alvo (str): texto da vaga
+
+    Retorna:
+        int: 1 se contido, 0 caso contrário
+    """
+    if isinstance(base, str) and isinstance(alvo, str):
+        return int(base in alvo)
+    return 0
+
+def normalizar_tipo_contratacao(texto):
+    """
+    Normaliza os tipos de contratação da coluna, tratando combinações, sinônimos,
+    capitalização e ordem dos termos.
+    """
+    # 1. Tratamento inicial de valores nulos/vazios
+    if pd.isna(texto) or not isinstance(texto, str) or str(texto).strip() == "":
+        return "vazio"
+    # 2. Converte para string, remove espaços e minúsculas
+    texto = str(texto).strip().lower()
+    # 3. Remover acentos
+    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
+    # 4. Substituições e padronizações específicas
+    texto = texto.replace('pj/autonomo', 'pj_autonomo')  # Unifica PJ/Autônomo
+    texto = texto.replace('clt full', 'clt_full')  # Padroniza CLT Full
+    texto = texto.replace('clt cotas', 'clt_cotas')  # Padroniza CLT Cotas
+    texto = texto.replace('candidato podera escolher', '')  # Remove frase redundante
+    texto = texto.replace('estagiario', 'estagio')  # Padroniza Estagiário
+    # 5. Remover caracteres não alfanuméricos exceto underscores e espaços
+    texto = re.sub(r'[^a-z0-9_\s]', '', texto)
+    # 6. Compactar múltiplos espaços
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    # 7. Separar os termos, remover vazios e normalizar a ordem para combinações
+    # Ex: 'clt_full pj_autonomo' e 'pj_autonomo clt_full' viram a mesma lista e são ordenadas
+    termos_individuais = sorted(list(set(filter(None, texto.split(' ')))))
+    # Junta os termos novamente com '_' para formar a categoria combinada
+    texto_normalizado = '_'.join(termos_individuais)
+    # 8. Mapeamento final para categorias complexas (se necessário, pode ser mais genérico)
+    # Essas regras são importantes para agrupar categorias que têm várias palavras
+    # mas que você quer tratar como um único tipo.
+    # A ordem é importante: das combinações mais longas para as mais curtas.
+    if "clt_cotas_cooperado_estagio_hunting_pj_autonomo" in texto_normalizado:
+        return "clt_cotas_cooperado_estagio_hunting_pj_autonomo"
+    elif "clt_cotas_cooperado_estagio_pj_autonomo" in texto_normalizado:
+        return "clt_cotas_cooperado_estagio_pj_autonomo"
+    elif "clt_cotas_clt_full_cooperado_estagio_pj_autonomo" in texto_normalizado:
+        return "clt_cotas_clt_full_cooperado_estagio_pj_autonomo"
+    elif "clt_cotas_clt_full_cooperado_pj_autonomo" in texto_normalizado:
+        return "clt_cotas_clt_full_cooperado_pj_autonomo"
+    elif "clt_cotas_clt_full_pj_autonomo" in texto_normalizado:
+        return "clt_cotas_clt_full_pj_autonomo"
+    elif "clt_cotas_pj_autonomo" in texto_normalizado:
+        return "clt_cotas_pj_autonomo"
+    elif "clt_full_cooperado_pj_autonomo" in texto_normalizado:
+        return "clt_full_cooperado_pj_autonomo"
+    elif "clt_full_hunting_pj_autonomo" in texto_normalizado:
+        return "clt_full_hunting_pj_autonomo"
+    elif "cooperado_hunting_pj_autonomo" in texto_normalizado:
+        return "cooperado_hunting_pj_autonomo"
+    elif "cooperado_pj_autonomo" in texto_normalizado:
+        return "cooperado_pj_autonomo"
+    elif "clt_cotas_cooperado" in texto_normalizado:
+        return "clt_cotas_cooperado"
+    elif "clt_cotas_clt_full" in texto_normalizado:
+        return "clt_cotas_clt_full"
+    elif "clt_full_cooperado" in texto_normalizado:
+        return "clt_full_cooperado"
+    elif "clt_full_hunting" in texto_normalizado:
+        return "clt_full_hunting"
+    elif "clt_full_pj_autonomo" in texto_normalizado:
+        return "clt_full_pj_autonomo"
+    elif "pj_autonomo_hunting" in texto_normalizado:
+        return "pj_autonomo_hunting"
+    elif "clt_full" in texto_normalizado:
+        return "clt_full"
+    elif "pj_autonomo" in texto_normalizado:
+        return "pj_autonomo"
+    elif "hunting" in texto_normalizado:
+        return "hunting"
+    elif "cooperado" in texto_normalizado:
+        return "cooperado"
+    elif "clt_cotas" in texto_normalizado:
+        return "clt_cotas"
+    elif "estagio" in texto_normalizado:
+        return "estagio"
+
+    return texto_normalizado if texto_normalizado else "vazio"
+
+def limpa_texto(texto):
+    """
+    Realiza uma série de limpezas em um texto:
+    1. Converte a entrada para string.
+    2. Remove espaços em branco no início e fim.
+    3. Converte para minúsculas.
+    4. Remove acentos.
+    5. Remove caracteres não alfanuméricos (mantém letras, números e espaços).
+    6. Compacta múltiplos espaços em um único espaço.
+    Args:
+        texto (str ou qualquer tipo): O texto a ser limpo.
+    Returns:
+        str: O texto limpo, ou "vazio" se a entrada for inválida/nula.
+    """
+    if pd.isna(texto) or not isinstance(texto, str) or str(texto).strip() == "":
+        return "vazio"  # Retorna "vazio" para NaN, não-strings ou strings vazias/apenas espaços
+    # 1. Converte para string (garante que números, etc., sejam tratados como texto)
+    texto = str(texto)
+    # 2. Remove espaços em branco no início e fim e converte para minúsculas
+    texto = texto.strip().lower()
+    # 3. Remove acentos (normalização Unicode)
+    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
+    # 4. Remove caracteres não alfanuméricos (mantém letras, números e espaços)
+    texto = re.sub(r'[^a-z0-9\s,]', '', texto)
+    # 5. Compacta múltiplos espaços em um único espaço
+    texto = re.sub(r'\s+', ' ', texto).strip()  # .strip() final para pegar espaços extras criados por re.sub
+    return texto
+
+def pre_processar(df):
+    """
+    Aplica as etapas de limpeza de texto e extração de features baseadas em texto e correspondência.
+    Esta função NÃO realiza One-Hot Encoding ou TF-IDF fitting/transformation.
+    Ela prepara as colunas para que os transformadores sejam aplicados em modelagem.py.
+    """
+    df_processed = df.copy() # Work on a copy
 
     colunas_texto = [
         "situacao_candidado", "recrutador", "comentario",
@@ -326,53 +334,31 @@ def pre_processar(df):
     ]
 
     for col in colunas_texto:
-        df[col] = df[col].apply(limpa_texto)
+        df_processed[col] = df_processed[col].apply(limpa_texto)
 
     # Features
-    df["match_ingles"] = (df["nivel_ingles"] == df["ingles_vaga"]).astype(int)
-    df["match_nivel_academico"] = (df["nivel_academico"] == df["nivel_academico_vaga"]).astype(int)
-    df["match_area_atuacao"] = df.apply(
+    df_processed["match_ingles"] = (df_processed["nivel_ingles"] == df_processed["ingles_vaga"]).astype(int)
+    df_processed["match_nivel_academico"] = (df_processed["nivel_academico"] == df_processed["nivel_academico_vaga"]).astype(int)
+    df_processed["match_area_atuacao"] = df_processed.apply(
         lambda row: match_texto_in_texto(row["area_atuacao"], row["area_atuacao_vaga"]),
         axis=1
     )
-    df["match_localidade"] = (df["local_candidato"] == df["cidade_vaga"]).astype(int)
-    df["match_pcd"] = (df["pcd"] == df["vaga_especifica_para_pcd"]).astype(int)
-    df['keywords_vaga'] = df.apply(
+    df_processed["match_localidade"] = (df_processed["local_candidato"] == df_processed["cidade_vaga"]).astype(int)
+    df_processed["match_pcd"] = (df_processed["pcd"] == df_processed["vaga_especifica_para_pcd"]).astype(int)
+    df_processed['keywords_vaga'] = df_processed.apply(
         lambda row: extrair_keywords_linha(row['principais_atividades_vaga'], row['competencia_tec_e_comp_vaga']),
         axis=1
     )
-    df['match_qtd_keywords_cv'] = df.apply(
+    df_processed['qtd_keywords_cv'] = df_processed.apply(
         lambda row: contar_keywords_cv_linha(row['cv'], row['keywords_vaga']),
         axis=1
     )
-    calcular_similaridade_cv_atividade(df)
+    df_processed = calcular_similaridade_cv_atividade(df_processed) # This modifies df_processed in place
+
     # Aplica a função de normalização
-    df['tipo_contratacao'] = df['tipo_contratacao'].apply(normalizar_tipo_contratacao)
+    df_processed['tipo_contratacao'] = df_processed['tipo_contratacao'].apply(normalizar_tipo_contratacao)
 
-    # handle_unknown='ignore' evita erros se surgir uma categoria nova que não foi vista no fit
-    # DataFrame para armazenar as novas colunas codificadas
-    df_encoded_features = pd.DataFrame()
-
-    cols_to_encode = [
-        "tipo_contratacao", "nivel_profissional", "nivel_academico",
-        "nivel_ingles", "nivel_espanhol", "ingles_vaga", "espanhol_vaga",
-        "nivel_academico_vaga"
-    ]
-
-    for col in cols_to_encode:
-        ohe = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
-        encoded_data = ohe.fit_transform(df[[col]])
-        # Ohe.get_feature_names_out() nos dá os nomes corretos para as novas colunas
-        new_cols_names = ohe.get_feature_names_out([col])
-        # Crie um DataFrame temporário para as colunas codificadas
-        temp_df = pd.DataFrame(encoded_data, columns=new_cols_names, index=df.index)
-        # Concatene as novas colunas ao DataFrame de features codificadas
-        df_encoded_features = pd.concat([df_encoded_features, temp_df], axis=1)
-
-    df_final = pd.concat([df, df_encoded_features], axis=1)
-    df_final = df_final.drop(columns=cols_to_encode)
-
-    return df_final
+    return df_processed
 
 
 if __name__ == "__main__":
@@ -386,5 +372,8 @@ if __name__ == "__main__":
     # Carregar e processar
     prospects, vagas, applicants = carrega_arquivos_json(caminho_prospects, caminho_vagas, caminho_applicants)
     df = consolidar_dados(prospects, vagas, applicants)
+    # df_final agora conterá apenas as colunas após limpeza de texto e features diretas,
+    # sem One-Hot Encoding ainda.
     df_final = pre_processar(df)
     df_final.to_parquet(caminho_df_final)
+    print("Dataset processado (texto limpo e features diretas) salvo com sucesso!")

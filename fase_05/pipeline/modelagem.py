@@ -1,9 +1,11 @@
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, precision_score, recall_score, f1_score
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import OneHotEncoder
 from xgboost import XGBClassifier, cv, DMatrix
 from imblearn.combine import SMOTEENN
 from mlflow.models.signature import infer_signature
+from preprocess import pre_processar
 import joblib
 import mlflow
 import mlflow.sklearn
@@ -30,17 +32,41 @@ def fpreproc(dtrain, dtest, param):
         com pesos atualizados, e o dicionário de parâmetros com `scale_pos_weight` ajustado.
     """
     label = dtrain.get_label()
-    ratio = float(np.sum(label == 0)) / np.sum(label == 1)
-    param['scale_pos_weight'] = ratio
+    # Check if there are instances of the minority class to avoid division by zero
+    if np.sum(label == 1) > 0:
+        ratio = float(np.sum(label == 0)) / np.sum(label == 1)
+        param['scale_pos_weight'] = ratio
+    else:
+        # If no positive samples, scale_pos_weight might not be applicable or set to a default
+        param['scale_pos_weight'] = 1.0 # Or handle as an error
+        print("Warning: No positive samples found in dtrain for scale_pos_weight calculation.")
+
     wtrain = dtrain.get_weight()
     wtest = dtest.get_weight()
-    sum_weight = sum(wtrain) + sum(wtest)
-    if sum(wtrain) > 0:
-        wtrain *= sum_weight / sum(wtrain)
-    if sum(wtest) > 0:
-        wtest *= sum_weight / sum(wtest)
-    dtrain.set_weight(wtrain)
-    dtest.set_weight(wtest)
+
+    # Only re-scale weights if they exist and sum > 0 to avoid division by zero
+    if wtrain is not None and sum(wtrain) > 0:
+        sum_weight_train = sum(wtrain)
+    else:
+        sum_weight_train = 0
+
+    if wtest is not None and sum(wtest) > 0:
+        sum_weight_test = sum(wtest)
+    else:
+        sum_weight_test = 0
+
+    total_sum_weight = sum_weight_train + sum_weight_test
+
+    if total_sum_weight > 0:
+        if sum_weight_train > 0:
+            wtrain *= total_sum_weight / sum_weight_train
+        if sum_weight_test > 0:
+            wtest *= total_sum_weight / sum_weight_test
+
+        if wtrain is not None:
+            dtrain.set_weight(wtrain)
+        if wtest is not None:
+            dtest.set_weight(wtest)
     return dtrain, dtest, param
 
 
@@ -107,24 +133,38 @@ def carregar_dados(path):
     return pd.read_parquet(path)
 
 
-def extrair_features_completas(df):
+def extrair_e_transformar_features(df_input, tfidf_model=None, ohe_models=None, original_feature_columns=None, is_training=True):
     """
-    Extrai um conjunto completo de features a partir de dados textuais e estruturados,
-    aplicando vetorização TF-IDF e selecionando colunas específicas para modelagem supervisionada.
-
-    Essa função deve ser usada apenas na etapa de preparação do conjunto de treino, pois
-    realiza o ajuste (`fit`) do TfidfVectorizer com base no conteúdo textual.
+    Extrai e transforma um conjunto completo de features a partir de dados textuais e estruturados,
+    aplicando vetorização TF-IDF e One-Hot Encoding.
 
     Args:
-        df (pd.DataFrame): DataFrame contendo as colunas de texto (como 'cv', 'objetivo_profissional')
-            e colunas estruturadas codificadas por One-Hot ou binárias.
+        df_input (pd.DataFrame): DataFrame contendo as colunas de texto e estruturadas.
+        tfidf_model (TfidfVectorizer, opcional): Modelo TF-IDF previamente ajustado.
+            Se None e is_training for True, um novo modelo será ajustado.
+        ohe_models (dict, opcional): Dicionário de objetos OneHotEncoder previamente ajustados.
+            As chaves são os nomes das colunas e os valores são os objetos OHE.
+            Se None e is_training for True, novos modelos serão ajustados.
+        original_feature_columns (list, opcional): Lista de nomes das colunas de features esperadas
+            para garantir consistência na ordem e presença das colunas.
+        is_training (bool): Indica se a função está sendo chamada para o conjunto de treino (True)
+            ou para predição/teste (False).
 
     Returns:
-        Tuple[pd.DataFrame, TfidfVectorizer]:
-            - Um DataFrame com as features combinadas (TF-IDF + colunas estruturadas).
-            - O objeto `TfidfVectorizer` já ajustado, que poderá ser reutilizado na etapa de predição.
+        Tuple[pd.DataFrame, TfidfVectorizer, dict, list]:
+            - Um DataFrame com as features combinadas (TF-IDF + One-Hot + numéricas/binárias).
+            - O objeto `TfidfVectorizer` (ajustado ou passado).
+            - O dicionário de objetos `OneHotEncoder` (ajustados ou passados).
+            - A lista de nomes das colunas finais de features.
     """
+    df = df_input.copy()
     df.columns = df.columns.astype(str)
+
+    # 1. Pré-processamento de texto e features diretas (comum a treino e inferência)
+    # A função pre_processar agora faz isso e não mais o One-Hot Encoding.
+    df = pre_processar(df)
+
+
     texto_completo = (
             df['cv'].fillna('') + ' ' +
             df['objetivo_profissional'].fillna('') + ' ' +
@@ -132,59 +172,66 @@ def extrair_features_completas(df):
             df['principais_atividades_vaga'].fillna('')
     )
 
-    tfidf = TfidfVectorizer(max_features=100)
-    X_texto = tfidf.fit_transform(texto_completo)
+    # TF-IDF
+    if is_training:
+        tfidf = TfidfVectorizer(max_features=100)
+        X_texto = tfidf.fit_transform(texto_completo)
+    else:
+        if tfidf_model is None:
+            raise ValueError("tfidf_model must be provided for prediction/test.")
+        tfidf = tfidf_model
+        X_texto = tfidf.transform(texto_completo)
 
-    X_estrut = df.filter(
-        regex=r'^(tipo_contratacao_|nivel_profissional_|nivel_academico_|nivel_ingles_|nivel_espanhol_|ingles_vaga_|espanhol_vaga_|feature_mesma_cidade$|^match_|^qtd_keywords_cv$|^sim_cv_atividade$)'
+    X_texto_df = pd.DataFrame(X_texto.toarray())
+    # Ensure TF-IDF column names are strings
+    X_texto_df.columns = [f'tfidf_{i}' for i in range(X_texto_df.shape[1])]
+
+
+    # One-Hot Encoding
+    cols_to_encode = [
+        "tipo_contratacao", "nivel_profissional", "nivel_academico",
+        "nivel_ingles", "nivel_espanhol", "ingles_vaga", "espanhol_vaga",
+        "nivel_academico_vaga"
+    ]
+
+    ohe_fitted_models = {}
+    df_encoded_features = pd.DataFrame(index=df.index) # Initialize with original index
+
+    for col in cols_to_encode:
+        if is_training:
+            ohe = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
+            encoded_data = ohe.fit_transform(df[[col]])
+            ohe_fitted_models[col] = ohe # Save the fitted OHE model
+        else:
+            if ohe_models is None or col not in ohe_models:
+                raise ValueError(f"OneHotEncoder for column '{col}' must be provided for prediction/test.")
+            ohe = ohe_models[col]
+            encoded_data = ohe.transform(df[[col]])
+
+        new_cols_names = ohe.get_feature_names_out([col])
+        temp_df = pd.DataFrame(encoded_data, columns=new_cols_names, index=df.index)
+        df_encoded_features = pd.concat([df_encoded_features, temp_df], axis=1)
+
+    # Numeric and binary features (already processed by pre_processar)
+    X_numeric_binary = df.filter(
+        regex=r'^(match_ingles|match_nivel_academico|match_area_atuacao|match_localidade|match_pcd|qtd_keywords_cv|match_cv_atividade$)'
     ).reset_index(drop=True)
 
-    X_final = pd.concat([pd.DataFrame(X_texto.toarray()), X_estrut.reset_index(drop=True)], axis=1)
-    # Ensure column names are strings for XGBoost compatibility
+    # Combine all features
+    X_final = pd.concat([X_texto_df, df_encoded_features.reset_index(drop=True), X_numeric_binary], axis=1)
     X_final.columns = X_final.columns.astype(str)
-    return X_final, tfidf
 
+    if is_training:
+        # For training, capture the final column names
+        final_feature_columns = X_final.columns.tolist()
+    else:
+        # For prediction, reindex to match the training columns, filling missing with 0
+        if original_feature_columns is None:
+            raise ValueError("original_feature_columns must be provided for prediction/test.")
+        X_final = X_final.reindex(columns=original_feature_columns, fill_value=0)
+        final_feature_columns = original_feature_columns # Just to return consistently
 
-def extrair_features_para_predicao(df_para_prever, tfidf_model, original_feature_columns):
-    """
-    Extrai as features necessárias para predição, garantindo consistência com o conjunto de treino.
-
-    Essa função aplica a transformação TF-IDF em novos dados utilizando um modelo já treinado,
-    e concatena com as features estruturadas do DataFrame. Também garante que a matriz final
-    tenha exatamente as mesmas colunas que o conjunto de treino, preenchendo com zero as
-    colunas ausentes se necessário.
-
-    Args:
-        df_para_prever (pd.DataFrame): DataFrame com os dados dos candidatos para predição.
-        tfidf_model (TfidfVectorizer): Modelo TF-IDF previamente ajustado no conjunto de treino.
-        original_feature_columns (List[str]): Lista de nomes das colunas de features usadas no treino,
-            usada para reindexar e alinhar as colunas de entrada do modelo.
-
-    Returns:
-        pd.DataFrame: DataFrame com as mesmas features (em ordem e formato) utilizadas durante o treinamento.
-    """
-    df_para_prever.columns = df_para_prever.columns.astype(str)
-    texto_completo = (
-            df_para_prever['cv'].fillna('') + ' ' +
-            df_para_prever['objetivo_profissional'].fillna('') + ' ' +
-            df_para_prever['titulo_profissional'].fillna('') + ' ' +
-            df_para_prever['principais_atividades_vaga'].fillna('')
-    )
-
-    # Use the tfidf_model (already fitted) to transform the new data
-    X_texto = tfidf_model.transform(texto_completo)
-
-    X_estrut = df_para_prever.filter(
-        regex=r'^(tipo_contratacao_|nivel_profissional_|nivel_academico_|nivel_ingles_|nivel_espanhol_|ingles_vaga_|espanhol_vaga_|feature_mesma_cidade$|^match_|^qtd_keywords_cv$|^sim_cv_atividade$)'
-    ).reset_index(drop=True)
-
-    X_final = pd.concat([pd.DataFrame(X_texto.toarray()), X_estrut.reset_index(drop=True)], axis=1)
-    X_final.columns = X_final.columns.astype(str)  # Ensure column names are strings
-
-    # Reindex to ensure all columns from training are present, filling missing with 0 (for new TF-IDF features not seen)
-    # This is important if max_features in TfidfVectorizer leads to different column counts
-    X_final = X_final.reindex(columns=original_feature_columns, fill_value=0)
-    return X_final
+    return X_final, tfidf, ohe_fitted_models, final_feature_columns
 
 
 def treinar_modelo_supervisionado(df_treinamento_input):
@@ -192,26 +239,32 @@ def treinar_modelo_supervisionado(df_treinamento_input):
     Treina um modelo supervisionado XGBoost com balanceamento de classes e clustering como feature adicional.
 
     Esta função realiza o pré-processamento completo dos dados, incluindo:
-    - Extração de features TF-IDF e estruturadas.
+    - Extração de features TF-IDF e estruturadas (com One-Hot Encoding).
     - Balanceamento das classes com SMOTEENN (over + under sampling).
     - Ajuste dos hiperparâmetros via cross-validation com `xgb.cv`.
     - Treinamento final com o número ideal de árvores (`n_estimators`).
     - Avaliação com métricas de classificação e registro no MLflow.
-    - Salvamento do modelo e do vetor TF-IDF via `joblib`.
+    - Salvamento do modelo, do vetor TF-IDF e dos OneHotEncoders via `joblib`.
 
     Args:
         df_treinamento_input (pd.DataFrame): DataFrame contendo os dados de treino,
             já rotulados com a coluna 'contratado'.
 
     Returns:
-        Tuple[XGBClassifier, TfidfVectorizer, List[str]]:
+        Tuple[XGBClassifier, TfidfVectorizer, dict, List[str]]:
             - O modelo XGBoost treinado.
             - O vetorizador TF-IDF ajustado.
-            - A lista de nomes das colunas finais de features (incluindo as de cluster).
+            - O dicionário de OneHotEncoders ajustados.
+            - A lista de nomes das colunas finais de features.
     """
     df_treinamento_input.columns = df_treinamento_input.columns.astype(str)
-    X, tfidf = extrair_features_completas(df_treinamento_input)  # `tfidf` is now returned
-    X.columns = X.columns.astype(str)
+
+    # Extrai e transforma features no conjunto de TREINO.
+    # tfidf e ohe_models serão ajustados aqui.
+    X, tfidf_model, ohe_models, original_feature_columns = extrair_e_transformar_features(
+        df_treinamento_input, is_training=True
+    )
+
     y = df_treinamento_input['contratado']
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -229,11 +282,12 @@ def treinar_modelo_supervisionado(df_treinamento_input):
     print(y_train_res.value_counts())
 
     # Prepare DMatrix for xgb.cv with the resampled data
-    # IMPORTANT: Do not apply fpreproc's scale_pos_weight if SMOTEENN already balanced the data to 1:1
-    # If the ratio is very close to 1 after SMOTEENN, scale_pos_weight in fpreproc will be ~1.
-    # We can pass an empty dict for param to fpreproc if we explicitly don't want scale_pos_weight applied here.
     dtrain = DMatrix(X_train_res, label=y_train_res)
-    dtest = DMatrix(X_test, label=y_test)  # X_test and y_test remain unresampled
+    # X_test needs to be transformed using the fitted TF-IDF and OHE models.
+    # For now, X_test already is, as it's a split of X which was generated with the fitted models.
+    # However, if we were loading X_test from an external source, it would need the full transformation.
+    # Let's create DMatrix for X_test as well.
+    dtest = DMatrix(X_test, label=y_test)
 
     param = {
         'max_depth': 8,
@@ -256,15 +310,12 @@ def treinar_modelo_supervisionado(df_treinamento_input):
         nfold=5,
         seed=42,
         metrics=['auc'],
-        fpreproc=fpreproc,  # Comment out or remove if SMOTEENN fully balances for CV
-        # If SMOTEENN creates close to 1:1 ratio, scale_pos_weight will be near 1, effectively doing nothing.
-        # Keeping it might still be fine, but often omitted if explicit resampling is done.
+        fpreproc=fpreproc,
         early_stopping_rounds=10,
         verbose_eval=10
     )
 
-    best_num_round = len(cv_results) if len(
-        cv_results) > 0 else num_round  # Fallback in case early stopping doesn't trigger
+    best_num_round = len(cv_results) if len(cv_results) > 0 else num_round
     print(f"\nMelhor número de rounds: {best_num_round}")
 
     clf = XGBClassifier(
@@ -275,16 +326,15 @@ def treinar_modelo_supervisionado(df_treinamento_input):
         nthread=param['nthread'],
         subsample=param['subsample'],
         colsample_bytree=param['colsample_bytree'],
-        # If SMOTEENN fully balances, scale_pos_weight should be 1 or omitted.
-        # float(np.sum(y_train_res == 0)) / np.sum(y_train_res == 1) will be 1 if perfectly balanced.
-        scale_pos_weight=float(np.sum(y_train_res == 0)) / np.sum(y_train_res == 1),  # Recalculate for resampled data
+        # scale_pos_weight is calculated based on the RESAMPLED data for the final model fit
+        scale_pos_weight=float(np.sum(y_train_res == 0)) / np.sum(y_train_res == 1),
         objective=param['objective'],
         eval_metric=param['eval_metric'],
         use_label_encoder=False,
         random_state=42
     )
     # Fit the model on the RESAMPLED training data!
-    clf.fit(X_train_res, y_train_res)  # <-- THIS WAS THE KEY CHANGE HERE
+    clf.fit(X_train_res, y_train_res)
 
     y_pred = clf.predict(X_test)
     y_pred_proba = clf.predict_proba(X_test)[:, 1]
@@ -305,35 +355,45 @@ def treinar_modelo_supervisionado(df_treinamento_input):
         mlflow.log_metric("f1_score_class1", f1_score(y_test, y_pred, pos_label=1))
 
         importances = clf.feature_importances_
-        feature_names = X.columns.tolist()  # Get feature names from the original X before resampling
+        feature_names = original_feature_columns
         fi_df = pd.DataFrame({"feature": feature_names, "importance": importances})
         fi_df.to_csv("feature_importances.csv", index=False)
         mlflow.log_artifact("feature_importances.csv")
 
+        # Use the raw X_test (before DMatrix conversion if needed) as input_example
         input_example = X_test.iloc[:1]
         signature = infer_signature(X_test, clf.predict(X_test))
         mlflow.sklearn.log_model(clf, "modelo_xgboost", input_example=input_example, signature=signature)
 
     joblib.dump(clf, "modelo_xgboost.pkl")
-    joblib.dump(tfidf, "vetorizador_tfidf.pkl")  # Save the fitted tfidf vectorizer
+    joblib.dump(tfidf_model, "vetorizador_tfidf.pkl")  # Save the fitted tfidf vectorizer
+    joblib.dump(ohe_models, "one_hot_encoders.pkl") # Save the dictionary of fitted OHE models
+    joblib.dump(original_feature_columns, "feature_columns.pkl") # Save the list of feature names
 
-    return clf, tfidf, X.columns.tolist()  # Return clf, tfidf, and the list of feature columns
+    return clf, tfidf_model, ohe_models, original_feature_columns
 
 
 if __name__ == "__main__":
     path = "C:\\Users\\ffporto\\Desktop\\Estudo\\FIAP\\fase05\\data\\"
+    # Ensure dataset_processado.parquet is generated by the new preprocess.py first
     df = carregar_dados(f"{path}dataset_processado.parquet")
     df.columns = df.columns.astype(str)
 
     # 1. Prepare training data and "in-progress" data
+    # This separation happens on the raw, pre-processed (text/direct features) dataframe
     df_treinamento, df_em_andamento = criar_coluna_contratado_refinada(df)
 
-    # 2. Train the model and get the TF-IDF vectorizer and original feature columns
-    clf, tfidf_model, original_feature_columns = treinar_modelo_supervisionado(df_treinamento)
+    # 2. Train the model and get all fitted transformers and feature columns
+    clf, tfidf_model, ohe_models, original_feature_columns = treinar_modelo_supervisionado(df_treinamento)
 
-    # 3. Prepare "in-progress" data for prediction using the loaded tfidf_model
-    # This new `extrair_features_para_predicao` function will ensure consistency
-    X_em_andamento = extrair_features_para_predicao(df_em_andamento, tfidf_model, original_feature_columns)
+    # 3. Prepare "in-progress" data for prediction using the loaded/fitted transformers
+    X_em_andamento, _, _, _ = extrair_e_transformar_features(
+        df_em_andamento,
+        tfidf_model=tfidf_model,
+        ohe_models=ohe_models,
+        original_feature_columns=original_feature_columns,
+        is_training=False # IMPORTANT: Set to False for prediction/test
+    )
 
     # 4. Make probability predictions for "in-progress" candidates
     probabilities_em_andamento = clf.predict_proba(X_em_andamento)[:, 1]
