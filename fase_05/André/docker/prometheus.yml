@@ -1,0 +1,42 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Decision ML API monitoring
+  - job_name: 'decision-ml-api'
+    static_configs:
+      - targets: ['decision-ml-api:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # MLflow server monitoring
+  - job_name: 'mlflow-server'
+    static_configs:
+      - targets: ['mlflow-server:5000']
+    scrape_interval: 60s
+
+  # Nginx monitoring (se configurado)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/nginx_status'
+    scrape_interval: 30s
+
+# Alerting rules (exemplo)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+

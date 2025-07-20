@@ -52,3 +52,8 @@ htmlcov/
 # Ignore files with personal credentials or configuration
 config.json
 secrets.json
+
+fase_05/André/notebooks/decision_ml_env
+fase_05/André/notebooks/mlruns
+fase_05/André/data/applicants.json
+fase_05/André/models/*.pkl

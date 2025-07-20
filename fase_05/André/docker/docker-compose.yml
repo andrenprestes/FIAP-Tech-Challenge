@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # API Principal
+  decision-ml-api:
+    build: .
+    container_name: decision-ml-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=info
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - decision-ml-network
+
+  # MLflow Tracking Server
+  mlflow-server:
+    image: python:3.11-slim
+    container_name: mlflow-server
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=sqlite:///mlflow/mlflow.db
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    volumes:
+      - mlflow_data:/mlflow
+    command: >
+      bash -c "
+        pip install mlflow==2.19.0 &&
+        mlflow server 
+        --backend-store-uri sqlite:///mlflow/mlflow.db 
+        --default-artifact-root /mlflow/artifacts 
+        --host 0.0.0.0 
+        --port 5000
+      "
+    restart: unless-stopped
+    networks:
+      - decision-ml-network
+
+  # Nginx Reverse Proxy (opcional)
+  nginx:
+    image: nginx:alpine
+    container_name: decision-ml-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - decision-ml-api
+    restart: unless-stopped
+    networks:
+      - decision-ml-network
+
+  # Prometheus para monitoramento (opcional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: decision-ml-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - decision-ml-network
+
+  # Grafana para visualização (opcional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: decision-ml-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+    networks:
+      - decision-ml-network
+
+volumes:
+  mlflow_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  decision-ml-network:
+    driver: bridge
+

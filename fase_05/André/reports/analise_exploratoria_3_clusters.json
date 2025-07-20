@@ -1,0 +1,339 @@
+{
+  "distribuicao_clusters": {
+    "total_registros": 53759,
+    "cluster_0_sucesso": {
+      "count": 3193,
+      "pct": 5.939470600271583
+    },
+    "cluster_1_sairam": {
+      "count": 9008,
+      "pct": 16.75626406741197
+    },
+    "cluster_2_processo": {
+      "count": 41558,
+      "pct": 77.30426533231645
+    }
+  },
+  "situacoes_por_cluster": {
+    "cluster_0": {
+      "Contratado pela Decision": {
+        "count": 2758,
+        "pct": 86.37644848105231
+      },
+      "Contratado como Hunting": {
+        "count": 226,
+        "pct": 7.07798308800501
+      },
+      "Aprovado": {
+        "count": 209,
+        "pct": 6.545568430942687
+      }
+    },
+    "cluster_1": {
+      "Não Aprovado pelo Cliente": {
+        "count": 3492,
+        "pct": 38.765541740674955
+      },
+      "Desistiu": {
+        "count": 2349,
+        "pct": 26.076820603907635
+      },
+      "Não Aprovado pelo RH": {
+        "count": 1765,
+        "pct": 19.593694493783303
+      },
+      "Não Aprovado pelo Requisitante": {
+        "count": 765,
+        "pct": 8.492451154529308
+      },
+      "Sem interesse nesta vaga": {
+        "count": 576,
+        "pct": 6.394316163410302
+      },
+      "Desistiu da Contratação": {
+        "count": 59,
+        "pct": 0.6549733570159858
+      },
+      "Recusado": {
+        "count": 2,
+        "pct": 0.022202486678507993
+      }
+    },
+    "cluster_2": {
+      "Prospect": {
+        "count": 20021,
+        "pct": 48.176043120458154
+      },
+      "Encaminhado ao Requisitante": {
+        "count": 16122,
+        "pct": 38.793974685981034
+      },
+      "Inscrito": {
+        "count": 3980,
+        "pct": 9.576976755378027
+      },
+      "Entrevista Técnica": {
+        "count": 579,
+        "pct": 1.3932335531065017
+      },
+      "Entrevista com Cliente": {
+        "count": 469,
+        "pct": 1.1285432407719331
+      },
+      "Em avaliação pelo RH": {
+        "count": 375,
+        "pct": 0.9023533375042111
+      },
+      "Documentação PJ": {
+        "count": 4,
+        "pct": 0.009625102266711583
+      },
+      "Documentação CLT": {
+        "count": 3,
+        "pct": 0.0072188267000336875
+      },
+      "Documentação Cooperado": {
+        "count": 2,
+        "pct": 0.004812551133355792
+      },
+      "Encaminhar Proposta": {
+        "count": 2,
+        "pct": 0.004812551133355792
+      },
+      "Proposta Aceita": {
+        "count": 1,
+        "pct": 0.002406275566677896
+      }
+    }
+  },
+  "performance_recrutadores": {
+    "total_recrutadores": 53,
+    "top_10": {
+      "Luna Dias": {
+        "total": 142,
+        "sucessos": 93,
+        "taxa_sucesso": 0.6549295774647887,
+        "taxa_saida": 0.2887323943661972
+      },
+      "Dr. Luan Sá": {
+        "total": 217,
+        "sucessos": 140,
+        "taxa_sucesso": 0.6451612903225806,
+        "taxa_saida": 0.06912442396313365
+      },
+      "Raquel Vieira": {
+        "total": 252,
+        "sucessos": 139,
+        "taxa_sucesso": 0.5515873015873016,
+        "taxa_saida": 0.05952380952380952
+      },
+      "Sra. Joana Sousa": {
+        "total": 486,
+        "sucessos": 230,
+        "taxa_sucesso": 0.4732510288065844,
+        "taxa_saida": 0.32510288065843623
+      },
+      "Paulo Peixoto": {
+        "total": 464,
+        "sucessos": 201,
+        "taxa_sucesso": 0.4331896551724138,
+        "taxa_saida": 0.1206896551724138
+      },
+      "Carlos Eduardo Ribeiro": {
+        "total": 515,
+        "sucessos": 221,
+        "taxa_sucesso": 0.429126213592233,
+        "taxa_saida": 0.03495145631067961
+      },
+      "Davi Miguel Correia": {
+        "total": 92,
+        "sucessos": 30,
+        "taxa_sucesso": 0.32608695652173914,
+        "taxa_saida": 0.021739130434782608
+      },
+      "Alana Dias": {
+        "total": 303,
+        "sucessos": 98,
+        "taxa_sucesso": 0.3234323432343234,
+        "taxa_saida": 0.43564356435643564
+      },
+      "Sra. Manuella Oliveira": {
+        "total": 258,
+        "sucessos": 64,
+        "taxa_sucesso": 0.24806201550387597,
+        "taxa_saida": 0.5310077519379846
+      },
+      "Dra. Maria Laura Sampaio": {
+        "total": 70,
+        "sucessos": 16,
+        "taxa_sucesso": 0.22857142857142856,
+        "taxa_saida": 0.22857142857142856
+      }
+    },
+    "media_taxa_sucesso": 0.11722843418579482,
+    "media_taxa_saida": 0.20674756252455945
+  },
+  "performance_modalidades": {
+    "Cooperado": {
+      "total": 590,
+      "sucessos": 365,
+      "taxa_sucesso": 0.6186440677966102,
+      "taxa_saida": 0.08135593220338982
+    },
+    "PJ": {
+      "total": 540,
+      "sucessos": 271,
+      "taxa_sucesso": 0.5018518518518519,
+      "taxa_saida": 0.10185185185185185
+    },
+    "Hunting": {
+      "total": 77,
+      "sucessos": 34,
+      "taxa_sucesso": 0.44155844155844154,
+      "taxa_saida": 0.09090909090909091
+    },
+    "CLT - Estratégico": {
+      "total": 70,
+      "sucessos": 30,
+      "taxa_sucesso": 0.42857142857142855,
+      "taxa_saida": 0.22857142857142856
+    },
+    "CLT": {
+      "total": 406,
+      "sucessos": 169,
+      "taxa_sucesso": 0.41625615763546797,
+      "taxa_saida": 0.13793103448275862
+    },
+    "": {
+      "total": 52076,
+      "sucessos": 2324,
+      "taxa_sucesso": 0.04462708349335586,
+      "taxa_saida": 0.1694830632153007
+    }
+  },
+  "tendencias_temporais": {
+    "2025-01": {
+      "total": 346,
+      "taxa_sucesso": 0.031791907514450865,
+      "taxa_saida": 0.0838150289017341,
+      "taxa_processo": 0.884393063583815
+    },
+    "2025-02": {
+      "total": 261,
+      "taxa_sucesso": 0.019157088122605363,
+      "taxa_saida": 0.06513409961685823,
+      "taxa_processo": 0.9157088122605364
+    },
+    "2025-03": {
+      "total": 33,
+      "taxa_sucesso": 0.030303030303030304,
+      "taxa_saida": 0.09090909090909091,
+      "taxa_processo": 0.8787878787878788
+    },
+    "2025-04": {
+      "total": 35,
+      "taxa_sucesso": 0.0,
+      "taxa_saida": 0.02857142857142857,
+      "taxa_processo": 0.9714285714285714
+    },
+    "2025-05": {
+      "total": 24,
+      "taxa_sucesso": 0.0,
+      "taxa_saida": 0.0,
+      "taxa_processo": 1.0
+    },
+    "2025-06": {
+      "total": 49,
+      "taxa_sucesso": 0.04081632653061224,
+      "taxa_saida": 0.08163265306122448,
+      "taxa_processo": 0.8775510204081632
+    },
+    "2025-07": {
+      "total": 37,
+      "taxa_sucesso": 0.05405405405405406,
+      "taxa_saida": 0.13513513513513514,
+      "taxa_processo": 0.8108108108108109
+    },
+    "2025-08": {
+      "total": 24,
+      "taxa_sucesso": 0.041666666666666664,
+      "taxa_saida": 0.08333333333333333,
+      "taxa_processo": 0.875
+    },
+    "2025-09": {
+      "total": 16,
+      "taxa_sucesso": 0.0,
+      "taxa_saida": 0.125,
+      "taxa_processo": 0.875
+    },
+    "2025-10": {
+      "total": 57,
+      "taxa_sucesso": 0.05263157894736842,
+      "taxa_saida": 0.0,
+      "taxa_processo": 0.9473684210526315
+    },
+    "2025-11": {
+      "total": 28,
+      "taxa_sucesso": 0.0,
+      "taxa_saida": 0.03571428571428571,
+      "taxa_processo": 0.9642857142857143
+    },
+    "2025-12": {
+      "total": 50,
+      "taxa_sucesso": 0.02,
+      "taxa_saida": 0.04,
+      "taxa_processo": 0.94
+    }
+  },
+  "insights_estrategicos": [
+    {
+      "tipo": "conversao",
+      "prioridade": "alta",
+      "titulo": "Taxa de Conversão Baixa",
+      "descricao": "Taxa de sucesso de apenas 5.9%. Oportunidade de melhoria no funil.",
+      "acao_recomendada": "Analisar gargalos no processo e otimizar etapas de maior perda."
+    },
+    {
+      "tipo": "recrutadores",
+      "prioridade": "media",
+      "titulo": "Grande Variação entre Recrutadores",
+      "descricao": "Diferença de 42.6% entre melhor e pior recrutador.",
+      "acao_recomendada": "Padronizar processos e treinar recrutadores com menor performance."
+    },
+    {
+      "tipo": "modalidades",
+      "prioridade": "media",
+      "titulo": "Modalidade de Alto Desempenho Identificada",
+      "descricao": "Cooperado tem taxa de sucesso de 61.9%.",
+      "acao_recomendada": "Expandir investimento nesta modalidade e aplicar práticas em outras."
+    },
+    {
+      "tipo": "processo",
+      "prioridade": "alta",
+      "titulo": "Alto Volume de Candidatos em Processo",
+      "descricao": "41,558 candidatos (77.3%) ainda em processo.",
+      "acao_recomendada": "Acelerar processo de decisão e implementar sistema de priorização."
+    }
+  ],
+  "metadata": {
+    "data_analise": "2025-07-19T23:29:36.662567",
+    "versao": "3_clusters_final",
+    "clusters_definicao": {
+      "0": {
+        "nome": "CANDIDATOS DE SUCESSO",
+        "emoji": "✅",
+        "cor": "#28a745"
+      },
+      "1": {
+        "nome": "CANDIDATOS QUE SAÍRAM DO PROCESSO",
+        "emoji": "⚠️",
+        "cor": "#ffc107"
+      },
+      "2": {
+        "nome": "CANDIDATOS EM PROCESSO",
+        "emoji": "🕐",
+        "cor": "#17a2b8"
+      }
+    }
+  }
+}
